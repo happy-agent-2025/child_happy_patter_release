@@ -17,11 +17,11 @@ try:
     # 创建基础模型类
     Base = declarative_base()
 
-    def get_db():
+    def get_db(): # type: ignore
         """
         获取数据库会话
         """
-        db = SessionLocal()
+        db = SessionLocal() # type: ignore
         try:
             yield db
         finally:

@@ -28,6 +28,8 @@ class MetaAgent:
             return "edu"
         elif "feel" in content or "情感" in content or "心情" in content:
             return "emotion"
+        elif "memory" in content or "记忆" in content or "历史" in content:
+            return "memory"
         else:
             return "edu"  # 默认路由到教育代理
     

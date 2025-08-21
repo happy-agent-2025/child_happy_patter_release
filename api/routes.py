@@ -1,8 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Dict, Any
-from ..agents.meta_agent import MetaAgent
-from ..agents.safety_agent import SafetyAgent
-from ..agents.edu_agent import EduAgent
+import sys
+import os
+
+# 添加项目根目录到Python路径
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 使用绝对导入
+from agents.meta_agent import MetaAgent
+from agents.safety_agent import SafetyAgent
+from agents.edu_agent import EduAgent
+from agents.memory_agent import MemoryAgent
 
 router = APIRouter()
 
@@ -10,6 +18,7 @@ router = APIRouter()
 meta_agent = MetaAgent()
 safety_agent = SafetyAgent()
 edu_agent = EduAgent()
+memory_agent = MemoryAgent()
 
 
 @router.post("/chat")
@@ -26,6 +35,8 @@ async def chat(request: Dict[str, Any]):
         result = safety_agent.process_request(request)
     elif agent_type == "edu":
         result = edu_agent.process_request(request)
+    elif agent_type == "memory":
+        result = memory_agent.process_request(request)
     else:
         result = {"agent": agent_type, "message": "请求已接收，正在处理中"}
     
@@ -47,4 +58,13 @@ async def edu_ask(request: Dict[str, Any]):
     教育问答接口
     """
     result = edu_agent.process_request(request)
+    return result
+
+
+@router.post("/memory/manage")
+async def memory_manage(request: Dict[str, Any]):
+    """
+    记忆管理接口
+    """
+    result = memory_agent.process_request(request)
     return result

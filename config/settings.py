@@ -1,7 +1,7 @@
 from pydantic import BaseSettings
 
 
-class Settings(BaseSettings):
+class Settings(BaseSettings): # type: ignore
     # 数据库配置
     database_url: str = "sqlite:///./happy_partner.db"
     

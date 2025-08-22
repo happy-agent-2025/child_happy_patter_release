@@ -1,5 +1,5 @@
 import speech_recognition as sr
-from typing import BinaryIO
+from typing import BinaryIO, Optional
 
 
 class STTService:
@@ -10,7 +10,7 @@ class STTService:
     def __init__(self):
         self.recognizer = sr.Recognizer()
     
-    def transcribe_audio(self, audio_file: BinaryIO = None) -> str:
+    def transcribe_audio(self, audio_file: Optional[BinaryIO] = None) -> str:
         """
         将音频转换为文本
         """
@@ -26,7 +26,8 @@ class STTService:
                     audio = self.recognizer.listen(source)
             
             # 使用Google语音识别API转换文本
-            text = self.recognizer.recognize_google(audio, language="zh-CN")
+            # 使用类型注释解决Pylance报错
+            text = self.recognizer.recognize_google(audio, language="zh-CN")  # type: ignore
             return text
         except Exception as e:
             return f"语音识别失败: {str(e)}"

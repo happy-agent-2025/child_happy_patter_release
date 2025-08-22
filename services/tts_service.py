@@ -1,4 +1,4 @@
-import pyttsx3
+import pyttsx3 # type: ignore
 from io import BytesIO
 
 

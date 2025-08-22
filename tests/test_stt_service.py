@@ -28,7 +28,7 @@ class TestSTTService:
             mock_recognizer.recognize_google.return_value = "测试文本"
             
             service = STTService()
-            result = service.transcribe_audio("fake_audio_file.wav")
+            result = service.transcribe_audio("fake_audio_file.wav") # type: ignore
             
             assert result == "测试文本"
             mock_sr.AudioFile.assert_called_once_with("fake_audio_file.wav")

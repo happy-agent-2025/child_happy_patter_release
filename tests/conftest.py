@@ -25,7 +25,7 @@ for module_name in mock_modules:
 
 # 为FastAPI测试客户端提供真实导入
 try:
-    from fastapi.testclient import TestClient
+    from fastapi.testclient import TestClient # type: ignore
 except ImportError:
     # 如果没有安装，创建一个模拟版本
     class TestClient:

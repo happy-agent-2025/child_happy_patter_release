@@ -1,22 +1,26 @@
 import sys
 import os
+import asyncio
 
 # 将项目根目录添加到Python路径中
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+# 在Windows上设置事件循环策略以避免警告
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 # 为避免依赖项问题，我们在这里模拟一些常用的模块
 import unittest.mock as mock
-import sys
 
 # 模拟缺少的模块（排除pydantic，因为它已被安装）
 mock_modules = [
-    'pyttsx3',
-    'speech_recognition',
-    'sqlalchemy',
+    #'pyttsx3',
+    #'speech_recognition',
+    #'sqlalchemy',
     #'pydantic',  # 不再模拟pydantic
-    'passlib',
-    'passlib.context',
-    'jwt'
+    #'passlib',
+    #'passlib.context',
+    #'jwt'
 ]
 
 for module_name in mock_modules:
@@ -51,3 +55,6 @@ except ImportError:
                     return {"message": "Mocked response", "status": "success"}
                     
             return MockResponse()
+
+# 添加pytest asyncio配置
+pytest_plugins = ["pytest_asyncio"]

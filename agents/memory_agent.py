@@ -125,7 +125,7 @@ class MemoryAgent:
             return {
                 "agent": "memory",
                 "action": "store",
-                "status": "success",
+                "status": "processed",
                 "message": "对话已存储"
             }
         elif action == "get_history":
@@ -134,7 +134,7 @@ class MemoryAgent:
             return {
                 "agent": "memory",
                 "action": "get_history",
-                "status": "success",
+                "status": "processed",
                 "history": history
             }
         elif action == "get_summary":
@@ -142,7 +142,7 @@ class MemoryAgent:
             return {
                 "agent": "memory",
                 "action": "get_summary",
-                "status": "success",
+                "status": "processed",
                 "summary": summary
             }
         elif action == "clear":
@@ -150,7 +150,7 @@ class MemoryAgent:
             return {
                 "agent": "memory",
                 "action": "clear",
-                "status": "success",
+                "status": "processed",
                 "message": "对话历史已清空"
             }
         else:  # 默认获取上下文
@@ -158,6 +158,6 @@ class MemoryAgent:
             return {
                 "agent": "memory",
                 "action": "get_context",
-                "status": "success",
+                "status": "processed",
                 "context": context
             }

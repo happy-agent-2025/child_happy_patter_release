@@ -53,4 +53,4 @@ class TestConfigSettings:
             os.environ.update(original_env)
             # 重新导入模块以恢复默认值
             import config.settings
-            importlib.reload(config.settings)
+            importlib.reload(config.settings) # type: ignore

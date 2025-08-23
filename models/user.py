@@ -1,31 +1,48 @@
-# 简化导入以避免相对导入问题
-try:
-    from sqlalchemy import Column, Integer, String, DateTime
-    from datetime import datetime
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+from datetime import datetime, timezone
+from db.database import Base
 
-    # 简化Base处理
-    Base = object
 
-    class User(Base):
-        __tablename__ = "users"
-        
-        id = Column(Integer, primary_key=True, index=True)
-        username = Column(String, unique=True, index=True)
-        email = Column(String, unique=True, index=True)
-        hashed_password = Column(String)
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-        
-except ImportError:
-    # 如果SQLAlchemy不可用，提供一个简化版本用于测试
-    from datetime import datetime
+class User(Base):
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    email = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
-    class User:
-        def __init__(self, **kwargs):
-            self.id = kwargs.get('id')
-            self.username = kwargs.get('username')
-            self.email = kwargs.get('email')
-            self.hashed_password = kwargs.get('hashed_password')
-            self.created_at = kwargs.get('created_at', datetime.utcnow())
-            self.updated_at = kwargs.get('updated_at', datetime.utcnow())
-            self.__tablename__ = "users"
+
+class Session(Base):
+    __tablename__ = "sessions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    title = Column(String)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    is_active = Column(Integer, default=1)  # 1为活跃，0为已删除
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    session_id = Column(Integer, ForeignKey("sessions.id"), index=True, nullable=True)
+    user_input = Column(Text)
+    agent_response = Column(Text)
+    agent_type = Column(String)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class SecurityLog(Base):
+    __tablename__ = "security_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    content = Column(Text)
+    is_safe = Column(Integer)  # 0 for unsafe, 1 for safe
+    filtered_content = Column(Text)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

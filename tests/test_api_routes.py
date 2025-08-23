@@ -149,3 +149,65 @@ class TestAPIRoutes:
         assert "agent" in result
         assert result["agent"] == "memory"
         assert "status" in result
+
+    def test_get_user_conversations_endpoint(self):
+        """测试获取用户对话历史端点"""
+        # 发送请求
+        user_id = 1
+        response = self.client.get(f"/api/users/{user_id}/conversations")
+        
+        # 验证响应
+        assert response.status_code == 200
+        result = response.json()
+        assert "user_id" in result
+        assert "conversations" in result
+
+    def test_get_user_security_logs_endpoint(self):
+        """测试获取用户安全日志端点"""
+        # 发送请求
+        user_id = 1
+        response = self.client.get(f"/api/users/{user_id}/security-logs")
+        
+        # 验证响应
+        assert response.status_code == 200
+        result = response.json()
+        assert "user_id" in result
+        assert "security_logs" in result
+
+    def test_session_management_endpoints(self):
+        """测试会话管理端点"""
+        user_id = 1
+        
+        # 创建会话
+        response = self.client.post(f"/api/users/{user_id}/sessions", params={"title": "测试会话"})
+        assert response.status_code == 200
+        session_result = response.json()
+        assert "session_id" in session_result
+        session_id = session_result["session_id"]
+        
+        # 获取用户会话列表
+        response = self.client.get(f"/api/users/{user_id}/sessions")
+        assert response.status_code == 200
+        sessions_result = response.json()
+        assert "sessions" in sessions_result
+        
+        # 在会话中进行对话
+        chat_data = {
+            "content": "你好，这是会话中的对话",
+            "user_id": user_id,
+            "session_id": session_id
+        }
+        response = self.client.post("/api/chat", json=chat_data)
+        assert response.status_code == 200
+        
+        # 获取会话中的对话
+        response = self.client.get(f"/api/sessions/{session_id}/conversations")
+        assert response.status_code == 200
+        conv_result = response.json()
+        assert "conversations" in conv_result
+        
+        # 删除会话
+        response = self.client.delete(f"/api/sessions/{session_id}")
+        assert response.status_code == 200
+        delete_result = response.json()
+        assert delete_result["deleted"] == True

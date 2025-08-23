@@ -41,6 +41,6 @@ class TestSTTService:
             mock_sr.AudioFile.side_effect = Exception("音频文件错误")
             
             service = STTService()
-            result = service.transcribe_audio("invalid_file.wav")
+            result = service.transcribe_audio("invalid_file.wav") # type: ignore
             
             assert "语音识别失败" in result

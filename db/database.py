@@ -1,21 +1,21 @@
 # 简化处理以避免导入问题
 try:
     from sqlalchemy import create_engine
-    from sqlalchemy.ext.declarative import declarative_base
-    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.orm import declarative_base, sessionmaker
     import os
 
     # 获取数据库URL
-    database_url = os.environ.get("DATABASE_URL", "sqlite:///./happy_partner.db")
+    DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./happy_partner.db")
 
     # 创建数据库引擎
-    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
     # 创建数据库会话
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
     # 创建基础模型类
     Base = declarative_base()
+
 
     def get_db(): # type: ignore
         """

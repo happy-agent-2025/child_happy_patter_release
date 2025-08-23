@@ -1,4 +1,5 @@
 from typing import Dict, Any, List
+from utils.openai_client import openai_client
 
 
 class MemoryAgent:
@@ -50,6 +51,60 @@ class MemoryAgent:
             "recent_history": self.get_conversation_history(3)
         }
     
+    def summarize_conversation_history(self, user_id: str) -> str:
+        """
+        使用OpenAI总结对话历史
+        
+        Args:
+            user_id: 用户ID
+            
+        Returns:
+            对话历史摘要
+        """
+        # 获取最近的对话历史
+        history = self.get_conversation_history(10)
+        
+        if not history:
+            return "暂无对话历史"
+        
+        # 构造对话历史文本
+        history_text = ""
+        for i, conv in enumerate(history, 1):
+            agent = conv.get("agent", "unknown")
+            content = conv.get("content", conv.get("question", "无内容"))
+            response = conv.get("response", conv.get("answer", "无回应"))
+            history_text += f"{i}. 用户与{agent}代理对话:\n"
+            history_text += f"   用户: {content}\n"
+            history_text += f"   回应: {response}\n\n"
+        
+        # 构造提示词
+        prompt = f"""
+        请为以下儿童用户(ID: {user_id})的对话历史生成一个简洁摘要：
+        
+        {history_text}
+        
+        摘要要求：
+        1. 突出孩子关心的主要话题
+        2. 总结孩子的兴趣点
+        3. 保持积极正面的语调
+        4. 用易于理解的语言
+        5. 控制在100字以内
+        """
+        
+        messages = [
+            {"role": "system", "content": "你是一个专业的对话历史总结助手。"},
+            {"role": "user", "content": prompt}
+        ]
+        
+        # 调用OpenAI API生成摘要
+        response = openai_client.chat_completion(
+            messages=messages,
+            temperature=0.3,
+            max_tokens=150
+        )
+        
+        return response
+    
     def process_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """
         处理记忆相关的请求
@@ -61,9 +116,11 @@ class MemoryAgent:
             处理结果
         """
         action = request.get("action", "get_context")
+        user_id = request.get("user_id", "unknown_user")
         
         if action == "store":
             conversation = request.get("conversation", {})
+            conversation["user_id"] = user_id
             self.store_conversation(conversation)
             return {
                 "agent": "memory",
@@ -79,6 +136,14 @@ class MemoryAgent:
                 "action": "get_history",
                 "status": "success",
                 "history": history
+            }
+        elif action == "get_summary":
+            summary = self.summarize_conversation_history(user_id)
+            return {
+                "agent": "memory",
+                "action": "get_summary",
+                "status": "success",
+                "summary": summary
             }
         elif action == "clear":
             self.clear_conversation_history()

@@ -1,40 +1,55 @@
 import pytest
+from unittest.mock import patch
+import sys
+import os
+
+# 添加项目根目录到Python路径
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from agents.edu_agent import EduAgent
 
 
 class TestEduAgent:
-    """测试EduAgent类"""
-    
+    """测试教育代理模块"""
+
     def test_init(self):
         """测试EduAgent初始化"""
         agent = EduAgent()
         assert agent is not None
-        assert isinstance(agent.knowledge_base, dict)
-    
-    def test_answer_question(self):
-        """测试问题回答功能"""
+        assert hasattr(agent, 'system_prompt')
+
+    @patch('utils.openai_client.openai_client.chat_completion')
+    def test_answer_question(self, mock_chat_completion):
+        """测试回答问题功能"""
+        # 设置模拟返回值
+        mock_chat_completion.return_value = "数学是研究数量、结构、空间以及变化等概念的一门学科。"
+
         agent = EduAgent()
+        result = agent.answer_question("什么是数学？")
+
+        # 验证结果
+        assert "数学是研究数量" in result
         
-        # 测试已知问题
-        math_question = "什么是数学？"
-        answer = agent.answer_question(math_question)
-        print(answer)
-        assert "数学是研究数量、结构、空间以及变化等概念的一门学科" in answer
-        
-        # 测试未知问题
-        unknown_question = "什么是物理？"
-        answer = agent.answer_question(unknown_question)
-        print(answer)
-        assert "我还在学习中" in answer
-    
-    def test_process_request(self):
-        """测试请求处理功能"""
+        # 验证方法被正确调用
+        mock_chat_completion.assert_called_once()
+
+    @patch('utils.openai_client.openai_client.chat_completion')
+    def test_process_request(self, mock_chat_completion):
+        """测试处理请求功能"""
+        # 设置模拟返回值
+        mock_chat_completion.return_value = "数学是研究数量、结构、空间以及变化等概念的一门学科。"
+
         agent = EduAgent()
-        request = {"content": "什么是语文？"}
+        request = {
+            "content": "什么是数学？",
+            "user_id": "test_user_1"
+        }
         result = agent.process_request(request)
-        print(result)
-        
+
+        # 验证结果
         assert result["agent"] == "edu"
-        assert result["question"] == "什么是语文？"
-        assert result["status"] == "processed"
-        assert "answer" in result
+        assert result["question"] == "什么是数学？"
+        assert "数学是研究数量" in result["answer"]
+        
+        # 验证方法被正确调用
+        mock_chat_completion.assert_called_once()

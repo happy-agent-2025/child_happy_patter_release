@@ -8,12 +8,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import unittest.mock as mock
 import sys
 
-# 模拟缺少的模块
+# 模拟缺少的模块（排除pydantic，因为它已被安装）
 mock_modules = [
     'pyttsx3',
     'speech_recognition',
     'sqlalchemy',
-    'pydantic',
+    #'pydantic',  # 不再模拟pydantic
     'passlib',
     'passlib.context',
     'jwt'

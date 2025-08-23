@@ -11,6 +11,7 @@ from agents.meta_agent import MetaAgent
 from agents.safety_agent import SafetyAgent
 from agents.edu_agent import EduAgent
 from agents.memory_agent import MemoryAgent
+from agents.emotion_agent import EmotionAgent
 
 router = APIRouter()
 
@@ -19,6 +20,7 @@ meta_agent = MetaAgent()
 safety_agent = SafetyAgent()
 edu_agent = EduAgent()
 memory_agent = MemoryAgent()
+emotion_agent = EmotionAgent()
 
 
 @router.post("/chat")
@@ -37,6 +39,8 @@ async def chat(request: Dict[str, Any]):
         result = edu_agent.process_request(request)
     elif agent_type == "memory":
         result = memory_agent.process_request(request)
+    elif agent_type == "emotion":
+        result = emotion_agent.process_request(request)
     else:
         result = {"agent": agent_type, "message": "请求已接收，正在处理中"}
     
@@ -58,6 +62,15 @@ async def edu_ask(request: Dict[str, Any]):
     教育问答接口
     """
     result = edu_agent.process_request(request)
+    return result
+
+
+@router.post("/emotion/support")
+async def emotion_support(request: Dict[str, Any]):
+    """
+    情感支持接口
+    """
+    result = emotion_agent.process_request(request)
     return result
 
 

@@ -215,11 +215,12 @@ async def get_user_conversations(user_id: int, limit: int = 10, db: Session = De
         "conversations": [
             {
                 "id": conv.id,
-                "user_input": conv.user_input,
-                "agent_response": conv.agent_response,
-                "agent_type": conv.agent_type,
+                "user_id": conv.user_id,
                 "session_id": conv.session_id,
-                "created_at": conv.created_at
+                "agent_type": conv.agent_type,
+                "conversation_history": conv.conversation_history,
+                "created_at": conv.created_at,
+                "updated_at": conv.updated_at
             }
             for conv in conversations
         ]

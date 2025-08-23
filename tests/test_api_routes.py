@@ -238,7 +238,15 @@ class TestAPIRoutes:
         conversations = result["conversations"]
         
         # 过滤出测试对话
-        test_conversations = [conv for conv in conversations if conv["user_input"] == "测试对话唯一性"]
+        test_conversations = []
+        for conv in conversations:
+            history = conv["conversation_history"]
+            if history and isinstance(history, list):
+                for entry in history:
+                    if entry.get("user_input") == "测试对话唯一性":
+                        test_conversations.append(conv)
+                        break
+        
         # 验证只有一条记录
         assert len(test_conversations) >= 1  # 至少有一条记录
 
@@ -266,6 +274,9 @@ class TestAPIRoutes:
         
         # 验证存储的内容包含情感分析
         latest_emotion_conv = emotion_conversations[0]
-        stored_data = json.loads(latest_emotion_conv["agent_response"])
+        history = latest_emotion_conv["conversation_history"]
+        assert history and isinstance(history, list)
+        latest_entry = history[-1]  # 获取最新的对话条目
+        stored_data = json.loads(latest_entry["agent_response"])
         assert "emotion_response" in stored_data
         assert "emotion_analysis" in stored_data

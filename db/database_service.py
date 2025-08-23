@@ -1,7 +1,12 @@
 from sqlalchemy.orm import Session
-from models.user import User, Session as UserSession, Conversation, SecurityLog
+from sqlalchemy import and_, text
+from models.user import User, Session as UserSession, Conversation, ArchivedConversation, SecurityLog
 from typing import List, Optional
+from datetime import datetime, timedelta
 import logging
+import hashlib
+import json
+import zlib
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -180,7 +185,20 @@ class DatabaseService:
             
         Returns:
             创建的对话对象
+            
+        注意事项:
+            1. 数据库资源消耗: 每次调用都会创建新记录，长期运行会增加存储需求
+            2. 性能影响: 大量记录可能影响查询性能
+            3. 成本考虑: 更多数据意味着更高的存储和计算成本
+            
+        优化建议:
+            1. 定期归档: 将旧数据移动到归档表中
+            2. 数据清理: 删除不再需要的记录
+            3. 分区表: 按时间或其他维度对表进行分区
+            4. 压缩存储: 对历史数据进行压缩存储
+            5. 索引优化: 确保查询使用的字段有适当索引
         """
+        # 总是创建新的对话记录，确保每次对话都被完整记录
         db_conversation = Conversation(
             user_id=user_id,
             session_id=session_id,
@@ -193,6 +211,106 @@ class DatabaseService:
         db.refresh(db_conversation)
         logger.info(f"创建对话记录: 用户{user_id}与{agent_type}代理")
         return db_conversation
+    
+    @staticmethod
+    def _compress_text(text: str) -> bytes:
+        """
+        压缩文本数据
+        
+        Args:
+            text: 要压缩的文本
+            
+        Returns:
+            压缩后的字节数据
+        """
+        return zlib.compress(text.encode('utf-8'))
+    
+    @staticmethod
+    def _decompress_text(data: bytes) -> str:
+        """
+        解压缩文本数据
+        
+        Args:
+            data: 压缩的字节数据
+            
+        Returns:
+            解压后的文本
+        """
+        return zlib.decompress(data).decode('utf-8')
+    
+    @staticmethod
+    def archive_old_conversations(db: Session, days_old: int = 30) -> int:
+        """
+        归档指定天数之前的对话记录
+        
+        Args:
+            db: 数据库会话
+            days_old: 归档多少天之前的记录，默认30天
+            
+        Returns:
+            归档的记录数量
+        """
+        cutoff_date = datetime.now() - timedelta(days=days_old)
+        
+        # 查询需要归档的记录
+        old_conversations = db.query(Conversation).filter(
+            Conversation.created_at < cutoff_date
+        ).all()
+        
+        count = len(old_conversations)
+        
+        # 如果有需要归档的记录，则进行归档和压缩
+        if count > 0:
+            # 将记录移动到归档表中，并进行压缩
+            for conversation in old_conversations:
+                # 创建归档记录，压缩user_input和agent_response字段
+                archived_conversation = ArchivedConversation(
+                    user_id=conversation.user_id,
+                    session_id=conversation.session_id,
+                    user_input=DatabaseService._compress_text(conversation.user_input), # type: ignore
+                    agent_response=DatabaseService._compress_text(conversation.agent_response), # type: ignore
+                    agent_type=conversation.agent_type,
+                    created_at=conversation.created_at
+                )
+                db.add(archived_conversation)
+            
+            # 提交归档记录
+            db.commit()
+            
+            # 从主表中删除已归档的记录
+            db.query(Conversation).filter(
+                Conversation.created_at < cutoff_date
+            ).delete()
+            db.commit()
+            
+            logger.info(f"已归档并压缩{count}条{days_old}天之前的对话记录")
+        
+        return count
+    
+    @staticmethod
+    def delete_old_conversations(db: Session, days_old: int = 365) -> int:
+        """
+        删除指定天数之前的对话记录
+        
+        Args:
+            db: 数据库会话
+            days_old: 删除多少天之前的记录，默认365天
+            
+        Returns:
+            删除的记录数量
+        """
+        cutoff_date = datetime.now() - timedelta(days=days_old)
+        
+        # 查询并删除旧记录
+        old_conversations = db.query(Conversation).filter(
+            Conversation.created_at < cutoff_date
+        )
+        count = old_conversations.count()
+        old_conversations.delete()
+        db.commit()
+        
+        logger.info(f"删除了{count}条{days_old}天之前的对话记录")
+        return count
     
     @staticmethod
     def get_conversations_by_user_id(db: Session, user_id: int, limit: int = 10) -> List[Conversation]:

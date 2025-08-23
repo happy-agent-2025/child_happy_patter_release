@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, LargeBinary
 from datetime import datetime, timezone
 from db.database import Base
 
@@ -35,6 +35,19 @@ class Conversation(Base):
     agent_response = Column(Text)
     agent_type = Column(String)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class ArchivedConversation(Base):
+    __tablename__ = "archived_conversations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    session_id = Column(Integer, index=True, nullable=True)
+    user_input = Column(LargeBinary)  # 压缩存储
+    agent_response = Column(LargeBinary)  # 压缩存储
+    agent_type = Column(String)
+    created_at = Column(DateTime)
+    archived_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class SecurityLog(Base):

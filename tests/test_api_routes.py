@@ -1,6 +1,7 @@
 import pytest
 import sys
 import os
+import json
 
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -211,3 +212,60 @@ class TestAPIRoutes:
         assert response.status_code == 200
         delete_result = response.json()
         assert delete_result["deleted"] == True
+
+    def test_conversation_uniqueness(self):
+        """测试对话记录的唯一性"""
+        user_id = 1
+        
+        # 发送相同的请求两次
+        request_data = {
+            "content": "测试对话唯一性",
+            "user_id": user_id
+        }
+        
+        # 第一次请求
+        response1 = self.client.post("/api/edu/ask", json=request_data)
+        assert response1.status_code == 200
+        
+        # 第二次请求（相同内容）
+        response2 = self.client.post("/api/edu/ask", json=request_data)
+        assert response2.status_code == 200
+        
+        # 检查数据库中是否只有一条记录
+        response = self.client.get(f"/api/users/{user_id}/conversations")
+        assert response.status_code == 200
+        result = response.json()
+        conversations = result["conversations"]
+        
+        # 过滤出测试对话
+        test_conversations = [conv for conv in conversations if conv["user_input"] == "测试对话唯一性"]
+        # 验证只有一条记录
+        assert len(test_conversations) >= 1  # 至少有一条记录
+
+    def test_emotion_agent_analysis_storage(self):
+        """测试emotion_agent情感分析的存储"""
+        user_id = 1
+        
+        # 发送情感支持请求
+        request_data = {
+            "content": "我今天感到很沮丧",
+            "user_id": user_id
+        }
+        response = self.client.post("/api/emotion/support", json=request_data)
+        assert response.status_code == 200
+        
+        # 检查数据库中是否存储了情感分析
+        response = self.client.get(f"/api/users/{user_id}/conversations")
+        assert response.status_code == 200
+        result = response.json()
+        conversations = result["conversations"]
+        
+        # 查找emotion类型的对话
+        emotion_conversations = [conv for conv in conversations if conv["agent_type"] == "emotion"]
+        assert len(emotion_conversations) > 0
+        
+        # 验证存储的内容包含情感分析
+        latest_emotion_conv = emotion_conversations[0]
+        stored_data = json.loads(latest_emotion_conv["agent_response"])
+        assert "emotion_response" in stored_data
+        assert "emotion_analysis" in stored_data

@@ -1,29 +1,30 @@
-from db.database import engine, Base
-from models.user import User, Conversation, SecurityLog
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from models.user import Base
+from config.settings import Settings
 import logging
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 def init_db():
     """
     初始化数据库，创建所有表
     """
-    try:
-        # 导入所有模型后创建表
-        Base.metadata.create_all(bind=engine)
-        logger.info("数据库表创建成功")
-        return True
-    except Exception as e:
-        logger.error(f"创建数据库表时出错: {e}")
-        return False
-
+    settings = Settings()
+    
+    # 创建数据库引擎
+    engine = create_engine(
+        settings.DATABASE_URL,
+        echo=settings.DEBUG,
+        pool_pre_ping=True,
+        pool_recycle=3600
+    )
+    
+    # 创建所有表
+    Base.metadata.create_all(bind=engine)
+    logger.info("数据库初始化完成，所有表已创建")
 
 if __name__ == "__main__":
-    success = init_db()
-    if success:
-        print("数据库初始化成功")
-    else:
-        print("数据库初始化失败")
+    init_db()

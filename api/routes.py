@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Dict, Any, Optional
 import sys
 import os
+import json
 
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -63,6 +64,14 @@ async def chat(request: Dict[str, Any], db: Session = Depends(get_db)):
         else:
             agent_response = str(result)
             
+        # 对于emotion_agent，同时记录情感分析结果
+        if agent_type == "emotion" and "emotion_analysis" in result:
+            emotion_data = {
+                "emotion_response": agent_response,
+                "emotion_analysis": result["emotion_analysis"]
+            }
+            agent_response = json.dumps(emotion_data, ensure_ascii=False)
+            
         DatabaseService.create_conversation(
             db, 
             user_id, 
@@ -81,6 +90,7 @@ async def safety_check(request: Dict[str, Any], db: Session = Depends(get_db)):
     内容安全检查接口
     """
     user_id = request.get("user_id", 1)  # 默认用户ID为1
+    session_id = request.get("session_id")  # 可选的会话ID
     result = safety_agent.process_request(request)
     
     # 记录安全检查到数据库
@@ -92,6 +102,16 @@ async def safety_check(request: Dict[str, Any], db: Session = Depends(get_db)):
             request["content"],
             safety_result["is_safe"],
             safety_result["filtered_content"]
+        )
+        
+        # 同时记录到对话表中
+        DatabaseService.create_conversation(
+            db,
+            user_id,
+            request["content"],
+            json.dumps(safety_result, ensure_ascii=False),
+            "safety",
+            session_id
         )
     
     return result
@@ -131,11 +151,18 @@ async def emotion_support(request: Dict[str, Any], db: Session = Depends(get_db)
     
     # 记录对话到数据库
     if "content" in request:
+        # 对于emotion_agent，同时记录情感分析结果
+        emotion_data = {
+            "emotion_response": result.get("response", str(result)),
+            "emotion_analysis": result.get("emotion_analysis", {})
+        }
+        agent_response = json.dumps(emotion_data, ensure_ascii=False)
+        
         DatabaseService.create_conversation(
             db, 
             user_id, 
             request["content"], 
-            result.get("response", str(result)), 
+            agent_response, 
             "emotion",
             session_id
         )
@@ -160,6 +187,16 @@ async def memory_manage(request: Dict[str, Any], db: Session = Depends(get_db)):
             user_id, 
             conversation.get("user_input", ""), 
             conversation.get("agent_response", ""), 
+            "memory",
+            session_id
+        )
+    elif "content" in request:
+        # 记录其他memory操作到数据库
+        DatabaseService.create_conversation(
+            db,
+            user_id,
+            request["content"],
+            json.dumps(result, ensure_ascii=False),
             "memory",
             session_id
         )
@@ -263,7 +300,7 @@ async def get_session_conversations(session_id: int, db: Session = Depends(get_d
     """
     # 检查会话是否存在且活跃
     session = DatabaseService.get_session_by_id(db, session_id)
-    if not session or session.is_active == 0:
+    if not session or session.is_active == 0: # type: ignore
         raise HTTPException(status_code=404, detail="会话未找到或已删除")
     
     conversations = DatabaseService.get_conversations_by_session_id(db, session_id)

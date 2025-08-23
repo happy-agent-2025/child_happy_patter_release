@@ -1,66 +1,72 @@
 # Happy Partner - 儿童教育AI系统
 
-一个多代理架构的儿童教育AI系统，专注于教育辅助和情感陪伴，具有音频处理、安全过滤和SQLite数据库功能。
+Happy Partner是一个专为儿童设计的教育AI系统，结合了多种AI代理来提供安全、有趣和个性化的学习体验。
 
-## 项目概述
+## 系统架构
 
-这是一个基于多代理架构的儿童教育AI系统，旨在为儿童提供教育辅助和情感陪伴。系统采用模块化设计，具备可扩展性，并集成了语音识别和合成技术。
+本系统采用模块化设计，主要包括以下组件：
 
-## MVP功能
+- **Meta Agent**: 负责请求路由和分发
+- **Safety Agent**: 内容安全检查，确保儿童接触的内容安全
+- **Edu Agent**: 教育问答，提供学科知识解答
+- **Memory Agent**: 对话记忆和上下文管理
+- **Emotion Agent**: 情感陪伴，提供情绪支持
+- **API服务**: FastAPI构建的RESTful API接口
+- **数据库服务**: SQLAlchemy构建的数据持久化层
 
-1. **多代理架构**:
-   - MetaAgent: 请求路由和意图识别
-   - SafetyAgent: 内容安全过滤
-   - EduAgent: 教育内容问答
+## 数据库优化建议
 
-2. **音频处理**:
-   - STT服务: 语音转文本
-   - TTS服务: 文本转语音
+由于系统设计要求每次对话都创建新记录，长期运行会产生大量数据。为优化数据库性能和资源使用，建议采取以下措施：
 
-3. **数据管理**:
-   - SQLite数据库
-   - SQLAlchemy ORM
+### 1. 定期归档策略
+- 将超过一定时间的历史数据移动到归档表中
+- 保持主表数据量在合理范围内
 
-4. **安全认证**:
-   - JWT令牌认证
-   - Bcrypt密码加密
+### 2. 数据清理机制
+- 定期删除不再需要的记录
+- 根据业务需求设定数据保留期限
 
-## 项目结构
+### 3. 表分区
+- 按时间维度对对话表进行分区
+- 提高查询性能，便于数据管理
 
-```
-happy_partner/
-├── api/              # API路由
-├── agents/           # 各类代理
-├── auth/             # 认证模块
-├── config/           # 配置文件
-├── core/             # 核心模块
-├── db/               # 数据库相关
-├── models/           # 数据模型
-├── schemas/          # 数据模式
-├── services/         # 服务模块
-├── tests/            # 测试文件
-├── utils/            # 工具模块
-├── main.py           # 主应用文件
-└── pytest.ini        # 测试配置
-```
+### 4. 压缩存储
+- 对历史数据采用压缩算法存储
+- 减少磁盘空间占用
 
-## 安装与运行
+### 5. 索引优化
+- 确保常用查询字段有适当索引
+- 定期分析和优化索引使用情况
 
-1. 安装依赖:
-   ```bash
-   pip install poetry
-   poetry install
-   ```
+## 数据库优化功能
 
-2. 运行应用:
-   ```bash
-   poetry run python main.py
-   ```
+系统已实现以下数据库优化功能：
 
-3. 运行测试:
-   ```bash
-   poetry run pytest
-   ```
+### 1. 对话记录归档
+- [archive_old_conversations](file:///D:/rag/happy_partter/happy_partner/db/database_service.py#L252-L292)方法可将指定天数之前的对话记录归档并压缩存储
+- 归档的数据会被移动到专门的归档表中，并在主表中删除
+- 数据在归档过程中会使用zlib算法进行压缩以节省存储空间
+- 归档表使用二进制字段存储压缩后的数据
+
+### 2. 对话记录清理
+- [delete_old_conversations](file:///D:/rag/happy_partter/happy_partner/db/database_service.py#L294-L315)方法可删除指定天数之前的对话记录
+- 默认删除365天之前的记录，可以通过参数自定义
+
+这些功能可以帮助管理系统长期运行产生的大量数据，保持数据库性能。
+
+## 安装和运行
+
+1. 克隆项目代码
+2. 安装依赖: `poetry install`
+3. 配置环境变量
+4. 初始化数据库: `python db/init_db.py`
+5. 启动服务: `python main.py`
+
+## 测试
+
+运行所有测试: `python -m pytest`
+
+运行特定测试: `python -m pytest tests/test_xxx.py`
 
 ## 开发计划
 

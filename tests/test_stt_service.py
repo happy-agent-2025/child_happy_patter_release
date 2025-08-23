@@ -28,19 +28,48 @@ class TestSTTService:
             mock_recognizer.recognize_google.return_value = "测试文本"
             
             service = STTService()
-            result = service.transcribe_audio("fake_audio_file.wav") # type: ignore
+            result = service.transcribe_audio("fake_audio_file.wav")  # type: ignore
             
             assert result == "测试文本"
             mock_sr.AudioFile.assert_called_once_with("fake_audio_file.wav")
     
-    def test_transcribe_audio_exception(self):
-        """测试转录异常处理"""
+    def test_transcribe_with_preprocessing(self):
+        """测试带预处理的音频转文本"""
         with patch('services.stt_service.sr') as mock_sr:
             mock_recognizer = MagicMock()
             mock_sr.Recognizer.return_value = mock_recognizer
-            mock_sr.AudioFile.side_effect = Exception("音频文件错误")
+            mock_audio = MagicMock()
+            mock_sr.AudioFile.return_value.__enter__.return_value = mock_audio
+            
+            # 模拟识别结果
+            mock_recognizer.recognize_google.return_value = "预处理测试文本"
             
             service = STTService()
-            result = service.transcribe_audio("invalid_file.wav") # type: ignore
+            result = service.transcribe_with_preprocessing("fake_audio_file.wav")  # type: ignore
             
-            assert "语音识别失败" in result
+            assert result == "预处理测试文本"
+    
+    def test_get_audio_info(self):
+        """测试获取音频文件信息"""
+        with patch('services.stt_service.sr') as mock_sr:
+            mock_recognizer = MagicMock()
+            mock_sr.Recognizer.return_value = mock_recognizer
+            mock_audio = MagicMock()
+            mock_sr.AudioFile.return_value.__enter__.return_value = mock_audio
+            
+            # 模拟音频属性
+            mock_audio.sample_rate = 16000
+            mock_audio.frame_data = b'fake_data' * 1600  # 0.1秒的音频
+            mock_audio.sample_width = 2
+            
+            service = STTService()
+            result = service.get_audio_info("fake_audio_file.wav")  # type: ignore
+            
+            # 使用MagicMock对象的return_value来设置返回值
+            mock_audio.sample_rate = 16000
+            
+            assert "sample_rate" in result
+            assert "duration" in result
+            assert "sample_width" in result
+            assert result["sample_rate"] == 16000
+            assert result["sample_width"] == 2

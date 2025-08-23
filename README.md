@@ -11,6 +11,7 @@ Happy Partner是一个专为儿童设计的教育AI系统，结合了多种AI代
 - **Edu Agent**: 教育问答，提供学科知识解答
 - **Memory Agent**: 对话记忆和上下文管理
 - **Emotion Agent**: 情感陪伴，提供情绪支持
+- **Audio Service**: 音频处理服务，包括语音识别、语音合成、音频预处理和声纹验证
 - **API服务**: FastAPI构建的RESTful API接口
 - **数据库服务**: SQLAlchemy构建的数据持久化层
 
@@ -107,6 +108,13 @@ Happy Partner是一个专为儿童设计的教育AI系统，结合了多种AI代
 - `POST /users/{user_id}/sessions` - 创建新会话
 - `GET /users/{user_id}/sessions` - 获取用户的所有活跃会话
 - `DELETE /sessions/{session_id}` - 删除会话（标记为非活跃）
+
+### 3. 音频处理接口
+- `POST /audio/transcribe` - 语音转文本接口
+- `POST /audio/synthesize` - 文本转语音接口
+- `POST /audio/process` - 音频预处理接口（归一化、静音移除、重采样）
+- `POST /voice/register` - 用户声纹注册接口
+- `POST /voice/verify` - 用户声纹验证接口
 
 ## 许可证
 

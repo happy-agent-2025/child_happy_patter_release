@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import Dict, Any, Optional
 import sys
@@ -16,6 +16,10 @@ from agents.memory_agent import MemoryAgent
 from agents.emotion_agent import EmotionAgent
 from db.database import get_db
 from db.database_service import DatabaseService
+from services.stt_service import STTService
+from services.tts_service import TTSService
+from services.processing import AudioProcessingService
+from services.verification import VoiceVerificationService
 
 router = APIRouter()
 
@@ -25,6 +29,12 @@ safety_agent = SafetyAgent()
 edu_agent = EduAgent()
 memory_agent = MemoryAgent()
 emotion_agent = EmotionAgent()
+
+# 初始化音频服务
+stt_service = STTService()
+tts_service = TTSService()
+audio_processing_service = AudioProcessingService()
+voice_verification_service = VoiceVerificationService()
 
 
 @router.post("/chat")
@@ -49,37 +59,19 @@ async def chat(request: Dict[str, Any], db: Session = Depends(get_db)):
     elif agent_type == "emotion":
         result = emotion_agent.process_request(request)
     else:
-        result = {"agent": agent_type, "message": "请求已接收，正在处理中"}
+        # 默认使用EduAgent处理
+        result = edu_agent.process_request(request)
+        agent_type = "edu"
     
-    # 记录对话到数据库
-    if "content" in request:
-        # 根据不同代理的响应格式存储对话
-        agent_response = ""
-        if "answer" in result:
-            agent_response = result["answer"]
-        elif "response" in result:
-            agent_response = result["response"]
-        elif "result" in result:
-            agent_response = str(result["result"])
-        else:
-            agent_response = str(result)
-            
-        # 对于emotion_agent，同时记录情感分析结果
-        if agent_type == "emotion" and "emotion_analysis" in result:
-            emotion_data = {
-                "emotion_response": agent_response,
-                "emotion_analysis": result["emotion_analysis"]
-            }
-            agent_response = json.dumps(emotion_data, ensure_ascii=False)
-            
-        DatabaseService.create_conversation(
-            db, 
-            user_id, 
-            request["content"], 
-            agent_response, 
-            agent_type,
-            session_id
-        )
+    # 存储对话历史
+    DatabaseService.create_conversation(
+        db, 
+        user_id=user_id, 
+        session_id=session_id, 
+        agent_type=agent_type, 
+        user_input=request.get("content", ""), 
+        agent_response=json.dumps(result, ensure_ascii=False)
+    )
     
     return result
 
@@ -89,30 +81,20 @@ async def safety_check(request: Dict[str, Any], db: Session = Depends(get_db)):
     """
     内容安全检查接口
     """
-    user_id = request.get("user_id", 1)  # 默认用户ID为1
-    session_id = request.get("session_id")  # 可选的会话ID
+    user_id = request.get("user_id", 1)
+    content = request.get("content", "")
+    
+    # 执行安全检查
     result = safety_agent.process_request(request)
     
-    # 记录安全检查到数据库
-    if "content" in request and "result" in result:
-        safety_result = result["result"]
-        DatabaseService.create_security_log(
-            db,
-            user_id,
-            request["content"],
-            safety_result["is_safe"],
-            safety_result["filtered_content"]
-        )
-        
-        # 同时记录到对话表中
-        DatabaseService.create_conversation(
-            db,
-            user_id,
-            request["content"],
-            json.dumps(safety_result, ensure_ascii=False),
-            "safety",
-            session_id
-        )
+    # 记录安全日志
+    DatabaseService.create_security_log(
+        db,
+        user_id=user_id,
+        content=content,
+        is_safe=result.get("is_safe", True),
+        filtered_content=result.get("filtered_content", content)
+    )
     
     return result
 
@@ -122,20 +104,20 @@ async def edu_ask(request: Dict[str, Any], db: Session = Depends(get_db)):
     """
     教育问答接口
     """
-    user_id = request.get("user_id", 1)  # 默认用户ID为1
-    session_id = request.get("session_id")  # 可选的会话ID
+    user_id = request.get("user_id", 1)
+    session_id = request.get("session_id")
+    
     result = edu_agent.process_request(request)
     
-    # 记录对话到数据库
-    if "content" in request and "answer" in result:
-        DatabaseService.create_conversation(
-            db, 
-            user_id, 
-            request["content"], 
-            result["answer"], 
-            "edu",
-            session_id
-        )
+    # 存储对话历史
+    DatabaseService.create_conversation(
+        db,
+        user_id=user_id,
+        session_id=session_id,
+        agent_type="edu",
+        user_input=request.get("content", ""),
+        agent_response=json.dumps(result, ensure_ascii=False)
+    )
     
     return result
 
@@ -145,27 +127,20 @@ async def emotion_support(request: Dict[str, Any], db: Session = Depends(get_db)
     """
     情感支持接口
     """
-    user_id = request.get("user_id", 1)  # 默认用户ID为1
-    session_id = request.get("session_id")  # 可选的会话ID
+    user_id = request.get("user_id", 1)
+    session_id = request.get("session_id")
+    
     result = emotion_agent.process_request(request)
     
-    # 记录对话到数据库
-    if "content" in request:
-        # 对于emotion_agent，同时记录情感分析结果
-        emotion_data = {
-            "emotion_response": result.get("response", str(result)),
-            "emotion_analysis": result.get("emotion_analysis", {})
-        }
-        agent_response = json.dumps(emotion_data, ensure_ascii=False)
-        
-        DatabaseService.create_conversation(
-            db, 
-            user_id, 
-            request["content"], 
-            agent_response, 
-            "emotion",
-            session_id
-        )
+    # 存储对话历史，包括情感分析
+    DatabaseService.create_conversation(
+        db,
+        user_id=user_id,
+        session_id=session_id,
+        agent_type="emotion",
+        user_input=request.get("content", ""),
+        agent_response=json.dumps(result, ensure_ascii=False)
+    )
     
     return result
 
@@ -175,30 +150,20 @@ async def memory_manage(request: Dict[str, Any], db: Session = Depends(get_db)):
     """
     记忆管理接口
     """
-    user_id = request.get("user_id", 1)  # 默认用户ID为1
-    session_id = request.get("session_id")  # 可选的会话ID
+    user_id = request.get("user_id", 1)
+    session_id = request.get("session_id")
+    
     result = memory_agent.process_request(request)
     
-    # 如果是存储操作，记录对话到数据库
-    if request.get("action") == "store" and "conversation" in request:
-        conversation = request["conversation"]
-        DatabaseService.create_conversation(
-            db, 
-            user_id, 
-            conversation.get("user_input", ""), 
-            conversation.get("agent_response", ""), 
-            "memory",
-            session_id
-        )
-    elif "content" in request:
-        # 记录其他memory操作到数据库
+    # 对于存储操作，记录对话历史
+    if request.get("action") == "store":
         DatabaseService.create_conversation(
             db,
-            user_id,
-            request["content"],
-            json.dumps(result, ensure_ascii=False),
-            "memory",
-            session_id
+            user_id=user_id,
+            session_id=session_id,
+            agent_type="memory",
+            user_input=request.get("content", ""),
+            agent_response=json.dumps(result, ensure_ascii=False)
         )
     
     return result
@@ -300,49 +265,51 @@ async def get_user_security_logs(user_id: int, limit: int = 10, db: Session = De
 
 
 @router.post("/users/{user_id}/sessions")
-async def create_session(user_id: int, title: str, db: Session = Depends(get_db)):
+async def create_user_session(user_id: int, request: Dict[str, Any], db: Session = Depends(get_db)):
     """
-    创建新会话
+    为用户创建新会话
     """
-    session = DatabaseService.create_session(db, user_id, title)
+    session_title = request.get("title", f"会话 {user_id}")
+    session = DatabaseService.create_session(db, user_id, session_title)
+    
     return {
         "session_id": session.id,
-        "user_id": user_id,
+        "user_id": session.user_id,
         "title": session.title,
-        "created_at": session.created_at
+        "created_at": session.created_at,
+        "is_active": bool(session.is_active)
     }
 
 
-@router.get("/users/{user_id}/sessions")
-async def get_user_sessions(user_id: int, db: Session = Depends(get_db)):
+@router.get("/sessions/{session_id}")
+async def get_session_info(session_id: int, db: Session = Depends(get_db)):
     """
-    获取用户的所有活跃会话
+    获取会话信息
     """
-    sessions = DatabaseService.get_active_sessions_by_user_id(db, user_id)
+    session = DatabaseService.get_session_by_id(db, session_id)
+    if not session or session.is_active == 0:
+        raise HTTPException(status_code=404, detail="会话未找到或已删除")
+    
     return {
-        "user_id": user_id,
-        "sessions": [
-            {
-                "id": session.id,
-                "title": session.title,
-                "created_at": session.created_at,
-                "updated_at": session.updated_at
-            }
-            for session in sessions
-        ]
+        "session_id": session.id,
+        "user_id": session.user_id,
+        "title": session.title,
+        "created_at": session.created_at,
+        "updated_at": session.updated_at,
+        "is_active": bool(session.is_active)
     }
 
 
 @router.delete("/sessions/{session_id}")
 async def delete_session(session_id: int, db: Session = Depends(get_db)):
     """
-    删除会话（标记为非活跃）
+    删除会话（软删除）
     """
     success = DatabaseService.delete_session(db, session_id)
-    return {
-        "session_id": session_id,
-        "deleted": success
-    }
+    if not success:
+        raise HTTPException(status_code=404, detail="会话未找到")
+    
+    return {"message": "会话删除成功"}
 
 
 @router.get("/sessions/{session_id}/conversations")
@@ -371,3 +338,135 @@ async def get_session_conversations(session_id: int, db: Session = Depends(get_d
             for conv in conversations
         ]
     }
+
+
+@router.post("/audio/transcribe")
+async def transcribe_audio(file: UploadFile = File(...)):
+    """
+    语音转文本接口
+    """
+    try:
+        # 读取上传的音频文件
+        contents = await file.read()
+        
+        # 使用STT服务进行转录
+        # 注意：这里简化处理，实际项目中可能需要保存文件或进行其他处理
+        text = stt_service.transcribe_audio(contents)  # type: ignore
+        
+        return {
+            "filename": file.filename,
+            "transcribed_text": text
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"转录失败: {str(e)}")
+
+
+@router.post("/audio/synthesize")
+async def synthesize_audio(request: Dict[str, Any]):
+    """
+    文本转语音接口
+    """
+    try:
+        text = request.get("text", "")
+        if not text:
+            raise HTTPException(status_code=400, detail="文本内容不能为空")
+        
+        # 使用TTS服务合成语音
+        audio_buffer = tts_service.synthesize_speech(text)
+        
+        # 返回音频数据
+        return {
+            "text": text,
+            "audio_data": audio_buffer.getvalue()  # 获取字节数据
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"语音合成失败: {str(e)}")
+
+
+@router.post("/audio/process")
+async def process_audio(file: UploadFile = File(...), 
+                       target_rate: int = 16000,
+                       target_rms: float = 0.1):
+    """
+    音频预处理接口
+    """
+    try:
+        # 读取上传的音频文件
+        contents = await file.read()
+        
+        # 这里简化处理，实际项目中需要解析音频数据
+        # 我们模拟一些音频数据进行处理
+        import numpy as np
+        audio_data = np.frombuffer(contents[:1000], dtype=np.int16).astype(np.float32) / 32768.0
+        
+        # 使用音频处理服务进行预处理
+        processed_audio = audio_processing_service.preprocess_audio(
+            audio_data, 16000, target_rate, target_rms)
+        
+        return {
+            "filename": file.filename,
+            "original_length": len(audio_data),
+            "processed_length": len(processed_audio),
+            "message": "音频预处理完成"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"音频预处理失败: {str(e)}")
+
+
+@router.post("/voice/register")
+async def register_voiceprint(request: Dict[str, Any]):
+    """
+    注册用户声纹接口
+    """
+    try:
+        user_id = request.get("user_id")
+        features = request.get("features")
+        
+        if not user_id or not features:
+            raise HTTPException(status_code=400, detail="用户ID和声纹特征不能为空")
+        
+        # 使用声纹验证服务注册声纹
+        success = voice_verification_service.register_user_voiceprint(user_id, features)
+        
+        if success:
+            return {
+                "user_id": user_id,
+                "message": "声纹注册成功"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="声纹注册失败")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"声纹注册失败: {str(e)}")
+
+
+@router.post("/voice/verify")
+async def verify_voiceprint(request: Dict[str, Any]):
+    """
+    验证用户声纹接口
+    """
+    try:
+        user_id = request.get("user_id")
+        features = request.get("features")
+        
+        if not user_id or not features:
+            raise HTTPException(status_code=400, detail="用户ID和声纹特征不能为空")
+        
+        # 使用声纹验证服务验证声纹
+        is_verified, similarity = voice_verification_service.verify_user_voiceprint(user_id, features)
+        
+        return {
+            "user_id": user_id,
+            "is_verified": is_verified,
+            "similarity": similarity,
+            "message": "声纹验证成功" if is_verified else "声纹验证失败"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"声纹验证失败: {str(e)}")
+
+
+@router.get("/")
+async def root():
+    """
+    根端点
+    """
+    return {"message": "儿童教育AI系统API服务", "version": "1.0.0"}

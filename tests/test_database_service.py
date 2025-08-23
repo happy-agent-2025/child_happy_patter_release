@@ -5,6 +5,7 @@ from models.user import User, Conversation, ArchivedConversation, SecurityLog
 from db.database_service import DatabaseService
 from datetime import datetime, timedelta
 import zlib
+import json
 
 
 class TestDatabaseService:
@@ -63,15 +64,27 @@ class TestDatabaseService:
         mock_query.filter.assert_called_once()
         mock_query.first.assert_called_once()
 
-    def test_create_conversation(self):
-        """测试创建对话记录功能"""
+    def test_create_conversation_new_session(self):
+        """测试为新用户和代理类型创建对话记录功能"""
         # 创建模拟的数据库会话
         mock_db = MagicMock()
+        
+        # 模拟查询结果为空（没有现有对话）
+        mock_query = MagicMock()
+        mock_filter = MagicMock()
+        mock_filter.first.return_value = None
+        mock_query.filter.return_value = mock_filter
+        mock_db.query.return_value = mock_query
+        
         mock_conversation = Conversation(
             id=1,
             user_id=1,
-            user_input="Hello",
-            agent_response="Hi there!",
+            session_id=100,
+            conversation_history=[{
+                "user_input": "Hello",
+                "agent_response": "Hi there!",
+                "timestamp": datetime.now().isoformat()
+            }],
             agent_type="edu"
         )
         mock_db.add.return_value = None
@@ -84,7 +97,8 @@ class TestDatabaseService:
             1,
             "Hello",
             "Hi there!",
-            "edu"
+            "edu",
+            100  # session_id
         )
 
         # 验证结果
@@ -93,18 +107,31 @@ class TestDatabaseService:
         mock_db.commit.assert_called_once()
         mock_db.refresh.assert_called_once()
 
-    def test_create_conversation_always_append(self):
-        """测试创建对话记录功能 - 始终追加新记录"""
+    def test_create_conversation_existing_session(self):
+        """测试为现有用户和代理类型追加对话记录功能"""
         # 创建模拟的数据库会话
         mock_db = MagicMock()
-        mock_conversation = Conversation(
-            id=2,  # 新的ID
+        
+        # 模拟已存在的对话记录
+        existing_conversation = Conversation(
+            id=1,
             user_id=1,
-            user_input="Hello",
-            agent_response="Hi there again!",
+            session_id=100,
+            conversation_history=[{
+                "user_input": "Hello",
+                "agent_response": "Hi there!",
+                "timestamp": datetime.now().isoformat()
+            }],
             agent_type="edu"
         )
-        mock_db.add.return_value = None
+        
+        # 模拟查询结果为已存在的对话
+        mock_query = MagicMock()
+        mock_filter = MagicMock()
+        mock_filter.first.return_value = existing_conversation
+        mock_query.filter.return_value = mock_filter
+        mock_db.query.return_value = mock_query
+        
         mock_db.commit.return_value = None
         mock_db.refresh.return_value = None
 
@@ -112,93 +139,200 @@ class TestDatabaseService:
         result = DatabaseService.create_conversation(
             mock_db,
             1,
-            "Hello",
-            "Hi there again!",
-            "edu"
-        )
-
-        # 验证结果 - 应该总是调用add方法创建新记录
-        assert result is not None
-        mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
-        mock_db.refresh.assert_called_once()
-
-    def test_create_conversation_with_same_user_and_session(self):
-        """测试相同用户和会话ID的对话存储"""
-        # 创建模拟的数据库会话
-        mock_db = MagicMock()
-        mock_conversation1 = Conversation(
-            id=1,
-            user_id=1,
-            session_id=100,
-            user_input="Hello",
-            agent_response="Hi there!",
-            agent_type="edu"
-        )
-        mock_conversation2 = Conversation(
-            id=2,  # 不同的ID
-            user_id=1,  # 相同的用户ID
-            session_id=100,  # 相同的会话ID
-            user_input="How are you?",
-            agent_response="I'm fine, thanks!",
-            agent_type="edu"
-        )
-        
-        # 设置模拟对象的返回值
-        mock_db.add.side_effect = lambda x: setattr(x, 'id', 1 if x.user_input == "Hello" else 2)
-        mock_db.commit.return_value = None
-        mock_db.refresh.return_value = None
-
-        # 创建第一条对话
-        result1 = DatabaseService.create_conversation(
-            mock_db,
-            1,  # user_id
-            "Hello",
-            "Hi there!",
+            "How are you?",
+            "I'm fine, thanks!",
             "edu",
             100  # session_id
         )
 
-        # 创建第二条对话
-        result2 = DatabaseService.create_conversation(
-            mock_db,
-            1,  # 相同的user_id
-            "How are you?",
-            "I'm fine, thanks!",
-            "edu",
-            100  # 相同的session_id
-        )
+        # 验证结果 - 应该更新现有记录而不是创建新记录
+        assert result is not None
+        assert len(result.conversation_history) == 2  # 应该有两条对话记录
+        mock_db.add.assert_not_called()  # 不应该调用add方法
+        mock_db.commit.assert_called_once()
+        mock_db.refresh.assert_called_once()
 
-        # 验证结果 - 应该创建两条独立的记录
-        assert result1 is not None
-        assert result2 is not None
-        assert result1.id != result2.id  # 确保是不同的记录
-        assert mock_db.add.call_count == 2  # 确保调用了两次add方法
-        assert mock_db.commit.call_count == 2  # 确保调用了两次commit方法
-        assert mock_db.refresh.call_count == 2  # 确保调用了两次refresh方法
+    def test_get_conversation_by_user_and_agent(self):
+        """测试根据用户ID和代理类型获取对话记录功能"""
+        # 创建模拟的数据库会话和查询
+        mock_db = MagicMock()
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        
+        conversation_history = [{
+            "user_input": "Hello",
+            "agent_response": "Hi there!",
+            "timestamp": datetime.now().isoformat()
+        }, {
+            "user_input": "How are you?",
+            "agent_response": "I'm fine, thanks!",
+            "timestamp": datetime.now().isoformat()
+        }]
+        
+        mock_filter = MagicMock()
+        mock_filter.first.return_value = Conversation(
+            id=1,
+            user_id=1,
+            session_id=100,
+            conversation_history=conversation_history,
+            agent_type="edu"
+        )
+        mock_query.filter.return_value = mock_filter
+
+        # 调用方法
+        result = DatabaseService.get_conversation_by_user_and_agent(mock_db, 1, "edu")
+
+        # 验证结果
+        assert result is not None
+        assert result.user_id == 1
+        assert result.agent_type == "edu"
+        assert len(result.conversation_history) == 2
+        mock_db.query.assert_called_once_with(Conversation)
+        mock_query.filter.assert_called_once()
+
+    def test_get_recent_conversations_by_user(self):
+        """测试根据用户ID获取最近对话记录功能"""
+        # 创建模拟的数据库会话和查询
+        mock_db = MagicMock()
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        
+        conversation_history = [{
+            "user_input": "Hello",
+            "agent_response": "Hi there!",
+            "timestamp": datetime.now().isoformat()
+        }]
+        
+        mock_filter = MagicMock()
+        mock_order_by = MagicMock()
+        mock_limit = MagicMock()
+        mock_filter.order_by.return_value = mock_order_by
+        mock_order_by.limit.return_value = mock_limit
+        mock_limit.all.return_value = [
+            Conversation(
+                id=1,
+                user_id=1,
+                session_id=100,
+                conversation_history=conversation_history,
+                agent_type="edu"
+            ),
+            Conversation(
+                id=2,
+                user_id=1,
+                session_id=101,
+                conversation_history=conversation_history,
+                agent_type="safety"
+            )
+        ]
+        mock_query.filter.return_value = mock_filter
+
+        # 调用方法
+        result = DatabaseService.get_recent_conversations_by_user(mock_db, 1, 10)
+
+        # 验证结果
+        assert result is not None
+        assert len(result) == 2
+        mock_db.query.assert_called_once_with(Conversation)
+        mock_query.filter.assert_called_once()
+
+    def test_get_conversations_by_session(self):
+        """测试根据会话ID获取对话记录功能"""
+        # 创建模拟的数据库会话和查询
+        mock_db = MagicMock()
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        
+        conversation_history = [{
+            "user_input": "Hello",
+            "agent_response": "Hi there!",
+            "timestamp": datetime.now().isoformat()
+        }]
+        
+        mock_filter = MagicMock()
+        mock_order_by = MagicMock()
+        mock_filter.order_by.return_value = mock_order_by
+        mock_order_by.all.return_value = [
+            Conversation(
+                id=1,
+                user_id=1,
+                session_id=100,
+                conversation_history=conversation_history,
+                agent_type="edu"
+            ),
+            Conversation(
+                id=2,
+                user_id=1,
+                session_id=100,
+                conversation_history=conversation_history,
+                agent_type="safety"
+            )
+        ]
+        mock_query.filter.return_value = mock_filter
+
+        # 调用方法
+        result = DatabaseService.get_conversations_by_session(mock_db, 100)
+
+        # 验证结果
+        assert result is not None
+        assert len(result) == 2
+        mock_db.query.assert_called_once_with(Conversation)
+        mock_query.filter.assert_called_once()
 
     def test_database_resource_usage(self):
         """测试数据库资源使用情况"""
         # 创建模拟的数据库会话
         mock_db = MagicMock()
+        
+        # 模拟查询行为
+        mock_query = MagicMock()
+        
+        # 使用side_effect来模拟第一次查询返回None，后续返回已创建的对话对象
+        call_count = 0
+        def query_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            mock_filter = MagicMock()
+            if call_count == 1:
+                # 第一次查询返回None（没有现有对话）
+                mock_filter.first.return_value = None
+            else:
+                # 后续查询返回已创建的对话对象
+                mock_filter.first.return_value = Conversation(
+                    id=1,
+                    user_id=1,
+                    session_id=100,
+                    conversation_history=[{
+                        "user_input": "Test input",
+                        "agent_response": "Test response",
+                        "timestamp": datetime.now().isoformat()
+                    }],
+                    agent_type="edu"
+                )
+            return mock_filter
+        
+        mock_query.filter.side_effect = query_side_effect
+        mock_db.query.return_value = mock_query
+        
         mock_db.add.return_value = None
         mock_db.commit.return_value = None
         mock_db.refresh.return_value = None
 
-        # 模拟多次创建对话记录
+        # 模拟多次创建对话记录（相同用户ID和代理类型）
         for i in range(10):
             DatabaseService.create_conversation(
                 mock_db,
                 1,
                 f"User input {i}",
                 f"Agent response {i}",
-                "edu"
+                "edu",
+                100  # session_id
             )
 
         # 验证资源使用情况
-        assert mock_db.add.call_count == 10  # 确保调用了10次add方法
-        assert mock_db.commit.call_count == 10  # 确保调用了10次commit方法
-        assert mock_db.refresh.call_count == 10  # 确保调用了10次refresh方法
+        # 第一次调用add创建新记录，后续9次应该更新现有记录
+        assert mock_db.add.call_count == 1  
+        assert mock_db.commit.call_count == 10  # 每次都应该调用commit
+        assert mock_db.refresh.call_count == 10  # 每次都应该调用refresh
 
     def test_archive_old_conversations(self):
         """测试归档旧对话记录功能"""
@@ -210,16 +344,24 @@ class TestDatabaseService:
             Conversation(
                 id=1, 
                 user_id=1, 
-                user_input="Old message 1", 
-                agent_response="Response 1", 
+                session_id=100,
+                conversation_history=[{
+                    "user_input": "Old message 1", 
+                    "agent_response": "Response 1", 
+                    "timestamp": datetime.now().isoformat()
+                }],
                 agent_type="edu",
                 created_at=datetime.now() - timedelta(days=40)
             ),
             Conversation(
                 id=2, 
                 user_id=2, 
-                user_input="Old message 2", 
-                agent_response="Response 2", 
+                session_id=101,
+                conversation_history=[{
+                    "user_input": "Old message 2", 
+                    "agent_response": "Response 2", 
+                    "timestamp": datetime.now().isoformat()
+                }],
                 agent_type="safety",
                 created_at=datetime.now() - timedelta(days=40)
             )
@@ -253,6 +395,18 @@ class TestDatabaseService:
         
         assert isinstance(compressed_data, bytes)
         assert decompressed_text == original_text
+        
+        # 测试JSON压缩功能
+        original_json = [{
+            "user_input": "Hello",
+            "agent_response": "Hi there!",
+            "timestamp": datetime.now().isoformat()
+        }]
+        compressed_json = DatabaseService._compress_json(original_json)
+        decompressed_json = DatabaseService._decompress_json(compressed_json)
+        
+        assert isinstance(compressed_json, bytes)
+        assert decompressed_json == original_json
 
     def test_delete_old_conversations(self):
         """测试删除旧对话记录功能"""

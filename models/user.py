@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, LargeBinary
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, LargeBinary, JSON
 from datetime import datetime, timezone
 from db.database import Base
 
@@ -31,10 +31,11 @@ class Conversation(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, index=True)
     session_id = Column(Integer, ForeignKey("sessions.id"), index=True, nullable=True)
-    user_input = Column(Text)
-    agent_response = Column(Text)
+    # 使用JSON类型存储对话历史
+    conversation_history = Column(JSON, default=list)
     agent_type = Column(String)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class ArchivedConversation(Base):
@@ -43,8 +44,7 @@ class ArchivedConversation(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, index=True)
     session_id = Column(Integer, index=True, nullable=True)
-    user_input = Column(LargeBinary)  # 压缩存储
-    agent_response = Column(LargeBinary)  # 压缩存储
+    conversation_history = Column(LargeBinary)  # 压缩存储对话历史
     agent_type = Column(String)
     created_at = Column(DateTime)
     archived_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

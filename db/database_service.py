@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, text
 from models.user import User, Session as UserSession, Conversation, ArchivedConversation, SecurityLog
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 import hashlib
 import json
@@ -173,7 +173,7 @@ class DatabaseService:
         session_id: Optional[int] = None
     ) -> Conversation:
         """
-        创建对话记录
+        创建或更新对话记录
         
         Args:
             db: 数据库会话
@@ -184,26 +184,51 @@ class DatabaseService:
             session_id: 会话ID（可选）
             
         Returns:
-            创建的对话对象
+            创建或更新的对话对象
             
         注意事项:
-            1. 数据库资源消耗: 每次调用都会创建新记录，长期运行会增加存储需求
-            2. 性能影响: 大量记录可能影响查询性能
-            3. 成本考虑: 更多数据意味着更高的存储和计算成本
-            
-        优化建议:
-            1. 定期归档: 将旧数据移动到归档表中
-            2. 数据清理: 删除不再需要的记录
-            3. 分区表: 按时间或其他维度对表进行分区
-            4. 压缩存储: 对历史数据进行压缩存储
-            5. 索引优化: 确保查询使用的字段有适当索引
+            1. 如果存在相同用户ID和代理类型的对话记录，则追加到该记录中
+            2. 如果不存在相同用户ID和代理类型的对话记录，则创建新记录
+            3. 每个用户与每个代理类型的所有对话历史都保存在同一个记录中
         """
-        # 总是创建新的对话记录，确保每次对话都被完整记录
+        # 查找相同用户ID和代理类型的现有对话记录
+        existing_conversation = db.query(Conversation).filter(
+            and_(
+                Conversation.user_id == user_id,
+                Conversation.agent_type == agent_type
+            )
+        ).first()
+        
+        # 如果存在相同用户ID和代理类型的记录，则追加对话历史
+        if existing_conversation:
+            # 获取现有的对话历史
+            conversation_history = existing_conversation.conversation_history or []
+            # 添加新的对话
+            conversation_history.append({
+                "user_input": user_input,
+                "agent_response": agent_response,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+            # 更新对话历史
+            existing_conversation.conversation_history = conversation_history # type: ignore
+            existing_conversation.updated_at = datetime.now(timezone.utc) # type: ignore
+            db.commit()
+            db.refresh(existing_conversation)
+            logger.info(f"更新对话记录: 用户{user_id}与{agent_type}代理的对话")
+            return existing_conversation
+        
+        # 如果不存在相同用户ID和代理类型的记录，则创建新记录
+        # 创建新的对话历史
+        conversation_history = [{
+            "user_input": user_input,
+            "agent_response": agent_response,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }]
+        
         db_conversation = Conversation(
             user_id=user_id,
             session_id=session_id,
-            user_input=user_input,
-            agent_response=agent_response,
+            conversation_history=conversation_history,
             agent_type=agent_type
         )
         db.add(db_conversation)
@@ -239,6 +264,34 @@ class DatabaseService:
         return zlib.decompress(data).decode('utf-8')
     
     @staticmethod
+    def _compress_json(data: List[dict]) -> bytes:
+        """
+        压缩JSON数据
+        
+        Args:
+            data: 要压缩的JSON数据
+            
+        Returns:
+            压缩后的字节数据
+        """
+        json_str = json.dumps(data, ensure_ascii=False)
+        return zlib.compress(json_str.encode('utf-8'))
+    
+    @staticmethod
+    def _decompress_json(data: bytes) -> List[dict]:
+        """
+        解压缩JSON数据
+        
+        Args:
+            data: 压缩的字节数据
+            
+        Returns:
+            解压后的JSON数据
+        """
+        json_str = zlib.decompress(data).decode('utf-8')
+        return json.loads(json_str)
+    
+    @staticmethod
     def archive_old_conversations(db: Session, days_old: int = 30) -> int:
         """
         归档指定天数之前的对话记录
@@ -263,12 +316,11 @@ class DatabaseService:
         if count > 0:
             # 将记录移动到归档表中，并进行压缩
             for conversation in old_conversations:
-                # 创建归档记录，压缩user_input和agent_response字段
+                # 创建归档记录，压缩conversation_history字段
                 archived_conversation = ArchivedConversation(
                     user_id=conversation.user_id,
                     session_id=conversation.session_id,
-                    user_input=DatabaseService._compress_text(conversation.user_input), # type: ignore
-                    agent_response=DatabaseService._compress_text(conversation.agent_response), # type: ignore
+                    conversation_history=DatabaseService._compress_json(conversation.conversation_history), # type: ignore
                     agent_type=conversation.agent_type,
                     created_at=conversation.created_at
                 )
@@ -313,6 +365,22 @@ class DatabaseService:
         return count
     
     @staticmethod
+    def get_conversation_history(db: Session, session_id: int) -> Optional[Conversation]:
+        """
+        获取指定会话的完整对话历史
+        
+        Args:
+            db: 数据库会话
+            session_id: 会话ID
+            
+        Returns:
+            包含完整对话历史的对话对象，如果不存在则返回None
+        """
+        return db.query(Conversation).filter(
+            Conversation.session_id == session_id
+        ).first()
+    
+    @staticmethod
     def get_conversations_by_user_id(db: Session, user_id: int, limit: int = 10) -> List[Conversation]:
         """
         根据用户ID获取对话历史
@@ -342,6 +410,59 @@ class DatabaseService:
         """
         return db.query(Conversation).filter(Conversation.session_id == session_id).order_by(
             Conversation.created_at.asc()).all()
+    
+    @staticmethod
+    def get_conversation_by_user_and_agent(db: Session, user_id: int, agent_type: str) -> Optional[Conversation]:
+        """
+        根据用户ID和代理类型获取对话记录
+        
+        Args:
+            db: 数据库会话
+            user_id: 用户ID
+            agent_type: 代理类型
+            
+        Returns:
+            包含完整对话历史的对话对象，如果不存在则返回None
+        """
+        return db.query(Conversation).filter(
+            and_(
+                Conversation.user_id == user_id,
+                Conversation.agent_type == agent_type
+            )
+        ).first()
+    
+    @staticmethod
+    def get_recent_conversations_by_user(db: Session, user_id: int, limit: int = 10) -> List[Conversation]:
+        """
+        根据用户ID获取最近的对话记录
+        
+        Args:
+            db: 数据库会话
+            user_id: 用户ID
+            limit: 限制返回记录数
+            
+        Returns:
+            对话记录列表，按创建时间倒序排列
+        """
+        return db.query(Conversation).filter(
+            Conversation.user_id == user_id
+        ).order_by(Conversation.created_at.desc()).limit(limit).all()
+    
+    @staticmethod
+    def get_conversations_by_session(db: Session, session_id: int) -> List[Conversation]:
+        """
+        根据会话ID获取对话记录
+        
+        Args:
+            db: 数据库会话
+            session_id: 会话ID
+            
+        Returns:
+            对话记录列表，按创建时间正序排列
+        """
+        return db.query(Conversation).filter(
+            Conversation.session_id == session_id
+        ).order_by(Conversation.created_at.asc()).all()
     
     @staticmethod
     def create_security_log(

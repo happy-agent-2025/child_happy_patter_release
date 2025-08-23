@@ -226,6 +226,57 @@ async def get_user_conversations(user_id: int, limit: int = 10, db: Session = De
     }
 
 
+@router.get("/users/{user_id}/conversations/recent")
+async def get_user_recent_conversations(user_id: int, limit: int = 10, db: Session = Depends(get_db)):
+    """
+    获取用户最近的对话记录
+    """
+    conversations = DatabaseService.get_recent_conversations_by_user(db, user_id, limit)
+    return {
+        "user_id": user_id,
+        "conversations": [
+            {
+                "id": conv.id,
+                "user_id": conv.user_id,
+                "session_id": conv.session_id,
+                "agent_type": conv.agent_type,
+                "conversation_history": conv.conversation_history,
+                "created_at": conv.created_at,
+                "updated_at": conv.updated_at
+            }
+            for conv in conversations
+        ]
+    }
+
+
+@router.get("/users/{user_id}/conversations/{agent_type}")
+async def get_user_conversation_by_agent(user_id: int, agent_type: str, db: Session = Depends(get_db)):
+    """
+    根据用户ID和代理类型获取对话记录
+    """
+    conversation = DatabaseService.get_conversation_by_user_and_agent(db, user_id, agent_type)
+    if not conversation:
+        return {
+            "user_id": user_id,
+            "agent_type": agent_type,
+            "conversation": None
+        }
+    
+    return {
+        "user_id": user_id,
+        "agent_type": agent_type,
+        "conversation": {
+            "id": conversation.id,
+            "user_id": conversation.user_id,
+            "session_id": conversation.session_id,
+            "agent_type": conversation.agent_type,
+            "conversation_history": conversation.conversation_history,
+            "created_at": conversation.created_at,
+            "updated_at": conversation.updated_at
+        }
+    }
+
+
 @router.get("/users/{user_id}/security-logs")
 async def get_user_security_logs(user_id: int, limit: int = 10, db: Session = Depends(get_db)):
     """
@@ -303,16 +354,18 @@ async def get_session_conversations(session_id: int, db: Session = Depends(get_d
     if not session or session.is_active == 0: # type: ignore
         raise HTTPException(status_code=404, detail="会话未找到或已删除")
     
-    conversations = DatabaseService.get_conversations_by_session_id(db, session_id)
+    conversations = DatabaseService.get_conversations_by_session(db, session_id)
     return {
         "session_id": session_id,
         "conversations": [
             {
                 "id": conv.id,
-                "user_input": conv.user_input,
-                "agent_response": conv.agent_response,
+                "user_id": conv.user_id,
+                "session_id": conv.session_id,
                 "agent_type": conv.agent_type,
-                "created_at": conv.created_at
+                "conversation_history": conv.conversation_history,
+                "created_at": conv.created_at,
+                "updated_at": conv.updated_at
             }
             for conv in conversations
         ]

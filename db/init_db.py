@@ -16,8 +16,8 @@ def init_db():
     
     # 创建数据库引擎
     engine = create_engine(
-        settings.DATABASE_URL,
-        echo=settings.DEBUG,
+        settings.database_url,  # 修复：使用正确的属性名
+        echo=settings.DEBUG if hasattr(settings, 'DEBUG') else False,
         pool_pre_ping=True,
         pool_recycle=3600
     )

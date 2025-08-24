@@ -493,16 +493,18 @@ async def register_voiceprint(request: Dict[str, Any]):
     try:
         user_id = request.get("user_id")
         features = request.get("features")
+        sample_rate = request.get("sample_rate", 16000)  # 默认采样率16kHz
         
         if not user_id or not features:
             raise HTTPException(status_code=400, detail="用户ID和声纹特征不能为空")
         
         # 使用声纹验证服务注册声纹
-        success = voice_verification_service.register_user_voiceprint(user_id, features)
+        success = voice_verification_service.register_user_voiceprint(user_id, features, sample_rate)
         
         if success:
             return {
                 "user_id": user_id,
+                "sample_rate": sample_rate,
                 "message": "声纹注册成功"
             }
         else:
@@ -519,17 +521,23 @@ async def verify_voiceprint(request: Dict[str, Any]):
     try:
         user_id = request.get("user_id")
         features = request.get("features")
+        threshold = request.get("threshold", 0.8)  # 默认阈值0.8
+        audio_duration = request.get("audio_duration", 0)  # 音频时长(毫秒)
         
         if not user_id or not features:
             raise HTTPException(status_code=400, detail="用户ID和声纹特征不能为空")
         
         # 使用声纹验证服务验证声纹
-        is_verified, similarity = voice_verification_service.verify_user_voiceprint(user_id, features)
+        is_verified, similarity = voice_verification_service.verify_user_voiceprint(
+            user_id, features, threshold, audio_duration
+        )
         
         return {
             "user_id": user_id,
             "is_verified": is_verified,
             "similarity": similarity,
+            "threshold": threshold,
+            "audio_duration": audio_duration,
             "message": "声纹验证成功" if is_verified else "声纹验证失败"
         }
     except Exception as e:

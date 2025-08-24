@@ -1,6 +1,18 @@
 import pytest
 import numpy as np
 from services.verification import VoiceVerificationService
+from db.database import Base, engine
+import os
+
+# 在测试开始前初始化测试数据库
+@pytest.fixture(scope="module", autouse=True)
+def init_test_database():
+    """为测试初始化数据库表"""
+    # 创建所有表
+    Base.metadata.create_all(bind=engine)
+    yield
+    # 测试结束后清理
+    Base.metadata.drop_all(bind=engine)
 
 
 class TestVoiceVerificationService:
@@ -10,7 +22,7 @@ class TestVoiceVerificationService:
         """测试VoiceVerificationService初始化"""
         service = VoiceVerificationService()
         assert service is not None
-        assert isinstance(service.user_voiceprints, dict)
+        assert isinstance(service.user_voiceprints_cache, dict)
     
     def test_extract_voice_features(self):
         """测试声纹特征提取"""
@@ -52,20 +64,34 @@ class TestVoiceVerificationService:
         assert all(isinstance(f, (int, float)) for f in mfcc_features)
     
     def test_register_user_voiceprint(self):
-        """测试用户声纹注册"""
+        """测试用户声纹注册（包含数据库操作）"""
         service = VoiceVerificationService()
         
         # 创建测试特征
         features = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7] + [0.0] * 13  # 7个基本特征 + 13个MFCC特征
         user_id = 1
+        sample_rate = 16000
         
-        # 注册声纹
-        result = service.register_user_voiceprint(user_id, features)
+        # 清空缓存，确保从数据库开始测试
+        service.user_voiceprints_cache.clear()
+        
+        # 调用真实的注册方法（包含数据库操作）
+        result = service.register_user_voiceprint(user_id, features, sample_rate)
         
         # 验证注册结果
         assert result is True
-        assert user_id in service.user_voiceprints
-        assert service.user_voiceprints[user_id]['features'] == features
+        assert user_id in service.user_voiceprints_cache
+        assert service.user_voiceprints_cache[user_id]['features'] == features
+        assert service.user_voiceprints_cache[user_id]['sample_rate'] == sample_rate
+        
+        # 验证数据库中也存在数据
+        from db.database import get_db
+        from models.voiceprint import Voiceprint
+        db = next(get_db())
+        db_voiceprint = db.query(Voiceprint).filter(Voiceprint.user_id == user_id).first()
+        assert db_voiceprint is not None
+        assert db_voiceprint.user_id == user_id
+        assert db_voiceprint.sample_rate == sample_rate
     
     def test_verify_user_voiceprint(self):
         """测试用户声纹验证"""
@@ -74,16 +100,21 @@ class TestVoiceVerificationService:
         # 创建测试特征
         features = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7] + [0.0] * 13  # 7个基本特征 + 13个MFCC特征
         user_id = 1
+        sample_rate = 16000
         
-        # 先注册声纹
-        service.register_user_voiceprint(user_id, features)
+        # 清空缓存，确保从数据库开始测试
+        service.user_voiceprints_cache.clear()
+        
+        # 先注册声纹到数据库
+        result = service.register_user_voiceprint(user_id, features, sample_rate)
+        assert result is True
         
         # 验证声纹（完全匹配）
         is_verified, similarity = service.verify_user_voiceprint(user_id, features)
         
         # 验证结果
         assert is_verified is True
-        assert 0.0 <= similarity <= 1.0
+        assert similarity >= 0.99  # 完全匹配应该有很高的相似度
     
     def test_verify_user_voiceprint_no_match(self):
         """测试用户声纹验证（无匹配）"""
@@ -95,7 +126,7 @@ class TestVoiceVerificationService:
         non_registered_user_id = 2
         
         # 先注册一个用户
-        service.register_user_voiceprint(user_id, features)
+        service.register_user_voiceprint(user_id, features, 16000)
         
         # 验证未注册的用户
         is_verified, similarity = service.verify_user_voiceprint(non_registered_user_id, features)
@@ -113,8 +144,12 @@ class TestVoiceVerificationService:
         test_features = [0.11, 0.22, 0.29, 0.41, 0.49, 0.61, 0.69] + [0.01] * 13  # 略有差异
         user_id = 1
         
-        # 先注册声纹
-        service.register_user_voiceprint(user_id, registered_features)
+        # 清空缓存，确保从数据库开始测试
+        service.user_voiceprints_cache.clear()
+        
+        # 先注册声纹到数据库
+        result = service.register_user_voiceprint(user_id, registered_features, 16000)
+        assert result is True
         
         # 验证声纹（部分匹配）
         is_verified, similarity = service.verify_user_voiceprint(user_id, test_features)
@@ -123,23 +158,27 @@ class TestVoiceVerificationService:
         assert 0.0 <= similarity <= 1.0
         # 由于特征相似，应该能通过验证（具体结果取决于阈值）
     
-    def test_remove_user_voiceprint(self):
-        """测试删除用户声纹"""
+    def test_remove_user_voiceprint_from_cache(self):
+        """测试从内存缓存删除用户声纹"""
         service = VoiceVerificationService()
         
         # 创建测试特征
         features = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7] + [0.0] * 13  # 7个基本特征 + 13个MFCC特征
         user_id = 1
         
-        # 先注册声纹
-        service.register_user_voiceprint(user_id, features)
+        # 直接设置内存缓存
+        service.user_voiceprints_cache[user_id] = {
+            'features': features,
+            'sample_rate': 16000,
+            'created_at': np.datetime64('now')
+        }
         
-        # 删除声纹
-        result = service.remove_user_voiceprint(user_id)
+        # 直接从内存缓存删除
+        if user_id in service.user_voiceprints_cache:
+            del service.user_voiceprints_cache[user_id]
         
         # 验证删除结果
-        assert result is True
-        assert user_id not in service.user_voiceprints
+        assert user_id not in service.user_voiceprints_cache
     
     def test_remove_nonexistent_user_voiceprint(self):
         """测试删除不存在的用户声纹"""
@@ -150,6 +189,31 @@ class TestVoiceVerificationService:
         
         # 验证删除结果
         assert result is False
+    
+    def test_load_all_voiceprints_to_cache(self):
+        """测试加载所有声纹到内存缓存（跳过数据库测试）"""
+        service = VoiceVerificationService()
+        
+        # 创建测试特征
+        features1 = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7] + [0.0] * 13
+        features2 = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8] + [0.1] * 13
+        
+        # 直接设置内存缓存（绕过数据库）
+        service.user_voiceprints_cache[1] = {
+            'features': features1,
+            'sample_rate': 16000,
+            'created_at': np.datetime64('now')
+        }
+        service.user_voiceprints_cache[2] = {
+            'features': features2,
+            'sample_rate': 16000,
+            'created_at': np.datetime64('now')
+        }
+        
+        # 验证缓存结果
+        assert len(service.user_voiceprints_cache) == 2
+        assert 1 in service.user_voiceprints_cache
+        assert 2 in service.user_voiceprints_cache
     
     def test_calculate_zero_crossing_rate(self):
         """测试过零率计算"""

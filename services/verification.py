@@ -1,7 +1,14 @@
 import numpy as np
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict, Any
 import hashlib
 from scipy.fftpack import dct
+from sqlalchemy.orm import Session
+from models.voiceprint import Voiceprint, VoiceVerificationLog
+from db.database import get_db
+import logging
+
+# 配置日志
+logger = logging.getLogger(__name__)
 
 
 class VoiceVerificationService:
@@ -11,8 +18,8 @@ class VoiceVerificationService:
     """
     
     def __init__(self):
-        # 存储用户声纹特征的字典
-        self.user_voiceprints = {}
+        # 存储用户声纹特征的字典（内存缓存，提高性能）
+        self.user_voiceprints_cache = {}
     
     def extract_voice_features(self, audio_data: np.ndarray, sample_rate: int) -> List[float]:
         """
@@ -129,30 +136,77 @@ class VoiceVerificationService:
         
         return float(low_energy), float(mid_energy), float(high_energy)
     
-    def register_user_voiceprint(self, user_id: int, features: List[float]) -> bool:
+    def register_user_voiceprint(self, user_id: int, features: List[float], sample_rate: int) -> bool:
         """
         注册用户声纹
         
         Args:
             user_id: 用户ID
             features: 声纹特征向量
+            sample_rate: 音频采样率
             
         Returns:
             注册是否成功
         """
+        db = None
         try:
-            # 存储用户声纹特征
-            self.user_voiceprints[user_id] = {
+            # 获取数据库会话
+            db = next(get_db())
+            
+            # 检查是否已存在声纹记录
+            existing_voiceprint = db.query(Voiceprint).filter(Voiceprint.user_id == user_id).first()
+            
+            if existing_voiceprint:
+                # 更新现有声纹
+                existing_voiceprint.set_features(features, sample_rate)
+            else:
+                # 创建新声纹记录
+                voiceprint = Voiceprint(
+                    user_id=user_id,
+                    sample_rate=sample_rate,
+                    feature_dimension=len(features)
+                )
+                voiceprint.set_features(features, sample_rate)
+                db.add(voiceprint)
+            
+            # 确保数据库提交成功
+            db.commit()
+            
+            # 验证提交是否真的成功 - 重新查询确认数据已持久化
+            committed_voiceprint = db.query(Voiceprint).filter(Voiceprint.user_id == user_id).first()
+            if not committed_voiceprint:
+                raise Exception("数据库提交后数据未找到，提交可能未成功")
+            
+            # 只有在数据库操作确认成功后更新内存缓存
+            self.user_voiceprints_cache[user_id] = {
                 'features': features,
+                'sample_rate': sample_rate,
                 'created_at': np.datetime64('now')
             }
+            
+            logger.info(f"用户 {user_id} 声纹注册成功，数据库和缓存均已更新")
             return True
+            
         except Exception as e:
-            print(f"注册用户声纹失败: {str(e)}")
+            # 如果数据库操作失败，确保回滚
+            if db:
+                try:
+                    db.rollback()
+                    logger.warning(f"数据库操作失败，已执行回滚: {str(e)}")
+                except Exception as rollback_error:
+                    logger.error(f"回滚操作也失败: {str(rollback_error)}")
+            
+            logger.error(f"注册用户声纹失败: {str(e)}")
+            
+            # 如果缓存中可能存在不一致数据，清理缓存
+            if user_id in self.user_voiceprints_cache:
+                del self.user_voiceprints_cache[user_id]
+                logger.warning(f"清理了可能不一致的缓存数据 for user {user_id}")
+            
             return False
     
     def verify_user_voiceprint(self, user_id: int, features: List[float], 
-                             threshold: float = 0.8) -> Tuple[bool, float]:
+                             threshold: float = 0.8, audio_duration: int = 0) -> Tuple[bool, float]:
         """
         验证用户声纹
         
@@ -160,22 +214,50 @@ class VoiceVerificationService:
             user_id: 用户ID
             features: 待验证的声纹特征向量
             threshold: 验证阈值（相似度阈值）
+            audio_duration: 音频时长(毫秒)
             
         Returns:
             (验证结果, 相似度分数)
         """
-        # 检查用户是否存在
-        if user_id not in self.user_voiceprints:
-            return False, 0.0
-        
-        # 获取注册的声纹特征
-        registered_features = self.user_voiceprints[user_id]['features']
+        # 首先检查内存缓存
+        if user_id in self.user_voiceprints_cache:
+            registered_features = self.user_voiceprints_cache[user_id]['features']
+        else:
+            # 从数据库查询声纹特征
+            try:
+                db = next(get_db())
+                voiceprint = db.query(Voiceprint).filter(Voiceprint.user_id == user_id).first()
+                
+                if not voiceprint:
+                    self._log_verification(user_id, False, 0.0, audio_duration)
+                    return False, 0.0
+                
+                registered_features, sample_rate = voiceprint.get_features()
+                if not registered_features:
+                    self._log_verification(user_id, False, 0.0, audio_duration)
+                    return False, 0.0
+                
+                # 更新内存缓存
+                self.user_voiceprints_cache[user_id] = {
+                    'features': registered_features,
+                    'sample_rate': sample_rate,
+                    'created_at': np.datetime64('now')
+                }
+                
+            except Exception as e:
+                logger.error(f"查询用户声纹失败: {str(e)}")
+                self._log_verification(user_id, False, 0.0, audio_duration)
+                return False, 0.0
         
         # 计算相似度
         similarity = self._calculate_similarity(registered_features, features)
+        similarity_percent = round(similarity * 100, 2)
         
         # 判断验证结果
         is_verified = similarity >= threshold
+        
+        # 记录验证日志
+        self._log_verification(user_id, is_verified, similarity_percent, audio_duration)
         
         return is_verified, similarity
     
@@ -206,6 +288,22 @@ class VoiceVerificationService:
         # 限制在0-1范围内
         return max(0.0, min(1.0, similarity))
     
+    def _log_verification(self, user_id: int, result: bool, similarity: float, audio_duration: int):
+        """记录声纹验证日志"""
+        try:
+            db = next(get_db())
+            log = VoiceVerificationLog(
+                user_id=user_id,
+                verification_result=1 if result else 0,
+                similarity_score=int(similarity),
+                audio_duration=audio_duration
+            )
+            db.add(log)
+            db.commit()
+            logger.info(f"声纹验证日志记录成功: 用户 {user_id}, 结果 {result}, 相似度 {similarity}%")
+        except Exception as e:
+            logger.error(f"记录声纹验证日志失败: {str(e)}")
+    
     def remove_user_voiceprint(self, user_id: int) -> bool:
         """
         删除用户声纹
@@ -214,12 +312,60 @@ class VoiceVerificationService:
             user_id: 用户ID
             
         Returns:
-            删除是否成功
+            删除是否成功（如果用户不存在返回False）
         """
-        if user_id in self.user_voiceprints:
-            del self.user_voiceprints[user_id]
+        try:
+            db = next(get_db())
+            
+            # 检查用户是否存在
+            voiceprint = db.query(Voiceprint).filter(Voiceprint.user_id == user_id).first()
+            
+            # 如果用户不存在，返回False
+            if not voiceprint and user_id not in self.user_voiceprints_cache:
+                return False
+            
+            # 删除数据库中的声纹记录
+            if voiceprint:
+                db.delete(voiceprint)
+            
+            # 删除内存缓存
+            if user_id in self.user_voiceprints_cache:
+                del self.user_voiceprints_cache[user_id]
+            
+            db.commit()
+            logger.info(f"用户 {user_id} 声纹删除成功")
             return True
-        return False
+            
+        except Exception as e:
+            logger.error(f"删除用户声纹失败: {str(e)}")
+            return False
+    
+    def load_all_voiceprints_to_cache(self) -> bool:
+        """
+        加载所有声纹到内存缓存
+        
+        Returns:
+            加载是否成功
+        """
+        try:
+            db = next(get_db())
+            voiceprints = db.query(Voiceprint).all()
+            
+            for voiceprint in voiceprints:
+                features, sample_rate = voiceprint.get_features()
+                if features and sample_rate:
+                    self.user_voiceprints_cache[voiceprint.user_id] = {
+                        'features': features,
+                        'sample_rate': sample_rate,
+                        'created_at': np.datetime64('now')
+                    }
+            
+            logger.info(f"成功加载 {len(voiceprints)} 个声纹到内存缓存")
+            return True
+            
+        except Exception as e:
+            logger.error(f"加载声纹到缓存失败: {str(e)}")
+            return False
     
     def _extract_mfcc(self, audio_data: np.ndarray, sample_rate: int, 
                       num_mfcc: int = 13) -> List[float]:

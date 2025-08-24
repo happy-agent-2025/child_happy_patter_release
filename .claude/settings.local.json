@@ -1,9 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -m pytest:*)"
+      "Bash(python -m pytest:*)",
+      "Bash(curl -X GET http://localhost:8000/api/auth/register)",
+      "Bash(curl -X GET http://localhost:8000/api/)"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "outputStyle": "Explanatory"
 }

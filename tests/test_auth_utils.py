@@ -39,6 +39,7 @@ class TestAuthUtils:
             with patch('auth.auth_utils.settings') as mock_settings:
                 mock_settings.secret_key = "test_secret_key"
                 mock_settings.algorithm = "HS256"
+                mock_settings.access_token_expire_minutes = 30  # 添加这个属性
                 
                 mock_jwt.encode.return_value = "test_token"
                 

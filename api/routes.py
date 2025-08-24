@@ -21,6 +21,8 @@ from services.tts_service import TTSService
 from services.processing import AudioProcessingService
 from services.verification import VoiceVerificationService
 from services.codecs import AudioCodecService
+from auth.auth_utils import get_password_hash, verify_password, create_access_token, get_current_user
+from schemas.auth import UserCreate, UserLogin, Token, UserResponse
 import io
 import soundfile as sf
 
@@ -460,7 +462,7 @@ async def process_audio(file: UploadFile = File(...),
             audio_data, original_rate = audio_codec_service.decode_wav(contents)
         except:
             # 如果WAV解码失败，尝试使用soundfile解码
-            audio_buffer = io.BytesIO(contents)
+            audio_buffer = io.BytesIO(contents) # type: ignore
             audio_data, original_rate = sf.read(audio_buffer)
         
         # 使用音频处理服务进行预处理
@@ -532,6 +534,146 @@ async def verify_voiceprint(request: Dict[str, Any]):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"声纹验证失败: {str(e)}")
+
+
+# 认证路由
+@router.post("/auth/register", response_model=UserResponse)
+async def register_user(user: UserCreate, db: Session = Depends(get_db)):
+    """
+    用户注册接口
+    """
+    # 检查用户名是否已存在
+    if DatabaseService.get_user_by_username(db, user.username):
+        raise HTTPException(
+            status_code=400,
+            detail="用户名已存在"
+        )
+    
+    # 检查邮箱是否已存在
+    if DatabaseService.get_user_by_email(db, user.email):
+        raise HTTPException(
+            status_code=400,
+            detail="邮箱已存在"
+        )
+    
+    # 加密密码
+    hashed_password = get_password_hash(user.password)
+    
+    # 创建用户
+    db_user = DatabaseService.create_user(db, user.username, user.email, hashed_password)
+    
+    return db_user
+
+
+@router.post("/auth/login", response_model=Token)
+async def login_user(user: UserLogin, db: Session = Depends(get_db)):
+    """
+    用户登录接口
+    """
+    # 验证用户
+    db_user = DatabaseService.get_user_by_username(db, user.username)
+    if not db_user or not verify_password(user.password, db_user.hashed_password):
+        raise HTTPException(
+            status_code=401,
+            detail="用户名或密码错误",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # 创建访问令牌
+    access_token = create_access_token(data={"sub": db_user.username})
+    
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.get("/auth/me", response_model=UserResponse)
+async def get_current_user_info(current_user = Depends(get_current_user)):
+    """
+    获取当前用户信息
+    """
+    return current_user
+
+
+# 会话管理增强功能
+@router.put("/sessions/{session_id}/title")
+async def update_session_title(
+    session_id: int, 
+    title: str, 
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    更新会话标题
+    """
+    session = DatabaseService.get_session_by_id(db, session_id, include_inactive=True)
+    if not session:
+        raise HTTPException(status_code=404, detail="会话未找到")
+    
+    if session.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="无权修改此会话")
+    
+    session.title = title # type: ignore
+    db.commit()
+    db.refresh(session)
+    
+    return {
+        "session_id": session.id,
+        "title": session.title,
+        "message": "会话标题更新成功"
+    }
+
+
+@router.post("/sessions/{session_id}/activate")
+async def activate_session(
+    session_id: int, 
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    激活会话
+    """
+    session = DatabaseService.get_session_by_id(db, session_id, include_inactive=True)
+    if not session:
+        raise HTTPException(status_code=404, detail="会话未找到")
+    
+    if session.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="无权操作此会话")
+    
+    session.is_active = 1 # type: ignore
+    db.commit()
+    db.refresh(session)
+    
+    return {
+        "session_id": session.id,
+        "is_active": bool(session.is_active),
+        "message": "会话已激活"
+    }
+
+
+@router.post("/sessions/{session_id}/deactivate")
+async def deactivate_session(
+    session_id: int, 
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    停用会话
+    """
+    session = DatabaseService.get_session_by_id(db, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="会话未找到")
+    
+    if session.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="无权操作此会话")
+    
+    session.is_active = 0 # type: ignore
+    db.commit()
+    db.refresh(session)
+    
+    return {
+        "session_id": session.id,
+        "is_active": bool(session.is_active),
+        "message": "会话已停用"
+    }
 
 
 @router.get("/")

@@ -144,6 +144,26 @@ class DatabaseService:
         return query.first()
     
     @staticmethod
+    def get_sessions_by_user_id(db: Session, user_id: int, limit: int = 10) -> List[UserSession]:
+        """
+        根据用户ID获取会话列表
+        
+        Args:
+            db: 数据库会话
+            user_id: 用户ID
+            limit: 返回的会话数量限制
+            
+        Returns:
+            会话对象列表
+        """
+        return db.query(UserSession)\
+                 .filter(UserSession.user_id == user_id)\
+                 .filter(UserSession.is_active == 1)\
+                 .order_by(UserSession.created_at.desc())\
+                 .limit(limit)\
+                 .all()
+    
+    @staticmethod
     def delete_session(db: Session, session_id: int) -> bool:
         """
         删除会话（标记为非活跃）

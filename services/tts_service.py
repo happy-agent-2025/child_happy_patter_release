@@ -1,7 +1,5 @@
 import pyttsx3  # type: ignore
 from io import BytesIO
-import tempfile
-import os
 from typing import Optional
 
 
@@ -35,25 +33,20 @@ class TTSService:
         Returns:
             包含音频数据的字节流
         """
-        # pyttsx3不直接支持输出到BytesIO，所以我们使用临时文件
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
-            tmp_filename = tmp_file.name
+        # 创建一个内存缓冲区来存储音频数据
+        audio_buffer = BytesIO()
         
-        try:
-            # 合成语音并保存到临时文件
-            self.engine.save_to_file(text, tmp_filename)
-            self.engine.runAndWait()
-            
-            # 读取临时文件内容到BytesIO
-            with open(tmp_filename, 'rb') as f:
-                audio_data = f.read()
-            
-            audio_buffer = BytesIO(audio_data)
-            return audio_buffer
-        finally:
-            # 清理临时文件
-            if os.path.exists(tmp_filename):
-                os.unlink(tmp_filename)
+        # 定义回调函数来捕获音频数据
+        def save_audio_data(data):
+            audio_buffer.write(data)
+        
+        # 合成语音并直接写入内存缓冲区
+        self.engine.save_to_file(text, audio_buffer)
+        self.engine.runAndWait()
+        
+        # 重置缓冲区指针到开始位置
+        audio_buffer.seek(0)
+        return audio_buffer
     
     def save_speech_to_file(self, text: str, filename: str):
         """

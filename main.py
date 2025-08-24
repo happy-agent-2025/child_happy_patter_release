@@ -33,7 +33,7 @@ app.include_router(router, prefix="/api")
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to Happy Partner - 儿童教育AI系统"}
+    return {"message": "儿童教育AI系统API服务"}
 
 if __name__ == "__main__":
     import uvicorn

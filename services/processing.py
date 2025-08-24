@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Tuple, Optional
 import warnings
+from scipy import signal
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 
@@ -45,7 +46,7 @@ class AudioProcessingService:
                       silence_threshold: float = 0.01, 
                       min_silence_duration: float = 0.1) -> np.ndarray:
         """
-        移除音频中的静音段
+        移除音频中的静音段（改进算法）
         
         Args:
             audio_data: 音频数据数组
@@ -59,16 +60,41 @@ class AudioProcessingService:
         # 计算最小静音样本数
         min_silence_samples = int(sample_rate * min_silence_duration)
         
-        # 找到非静音区域
-        non_silent_indices = np.where(np.abs(audio_data) > silence_threshold)[0]
+        # 计算音频的短时能量
+        frame_length = int(sample_rate * 0.02)  # 20ms帧长
+        hop_length = int(sample_rate * 0.01)    # 10ms帧移
         
-        if len(non_silent_indices) == 0:
+        # 计算帧数
+        num_frames = 1 + int((len(audio_data) - frame_length) / hop_length)
+        
+        # 计算每帧的能量
+        energies = []
+        for i in range(num_frames):
+            start_idx = i * hop_length
+            end_idx = min(start_idx + frame_length, len(audio_data))
+            frame = audio_data[start_idx:end_idx]
+            energy = np.sum(frame ** 2) / len(frame)
+            energies.append(energy)
+        
+        # 归一化能量
+        energies = np.array(energies)
+        if np.max(energies) > 0:
+            energies = energies / np.max(energies)
+        
+        # 找到非静音帧
+        non_silent_frames = np.where(energies > silence_threshold)[0]
+        
+        if len(non_silent_frames) == 0:
             # 如果整个音频都是静音，返回空数组
             return np.array([])
         
-        # 找到第一个和最后一个非静音样本
-        start_idx = max(0, non_silent_indices[0] - min_silence_samples)
-        end_idx = min(len(audio_data), non_silent_indices[-1] + min_silence_samples)
+        # 找到第一个和最后一个非静音帧
+        first_frame = max(0, non_silent_frames[0] - min_silence_samples // hop_length)
+        last_frame = min(num_frames - 1, non_silent_frames[-1] + min_silence_samples // hop_length)
+        
+        # 转换为样本索引
+        start_idx = max(0, first_frame * hop_length)
+        end_idx = min(len(audio_data), (last_frame + 1) * hop_length)
         
         # 返回非静音部分
         return audio_data[start_idx:end_idx]
@@ -76,7 +102,7 @@ class AudioProcessingService:
     def resample_audio(self, audio_data: np.ndarray, original_rate: int, 
                       target_rate: int) -> np.ndarray:
         """
-        音频重采样
+        音频重采样（使用scipy高质量重采样算法）
         
         Args:
             audio_data: 音频数据数组
@@ -89,21 +115,19 @@ class AudioProcessingService:
         if original_rate == target_rate:
             return audio_data
             
-        # 计算重采样比例
-        ratio = target_rate / original_rate
+        # 使用scipy的高质量重采样算法
+        # 计算重采样系数
+        resample_ratio = target_rate / original_rate
         
-        # 计算新长度
-        new_length = int(len(audio_data) * ratio)
-        
-        # 简单的线性重采样（实际项目中可以使用更高级的算法）
-        if new_length > len(audio_data):
-            # 上采样 - 插值
-            indices = np.linspace(0, len(audio_data) - 1, new_length)
-            resampled = np.interp(indices, np.arange(len(audio_data)), audio_data)
+        # 使用scipy.signal.resample进行高质量重采样
+        if resample_ratio > 1:
+            # 上采样
+            new_length = int(len(audio_data) * resample_ratio)
+            resampled = signal.resample(audio_data, new_length)
         else:
-            # 下采样 - 选择性采样
-            indices = np.linspace(0, len(audio_data) - 1, new_length)
-            resampled = audio_data[np.round(indices).astype(int)]
+            # 下采样
+            new_length = int(len(audio_data) * resample_ratio)
+            resampled = signal.resample(audio_data, new_length)
             
         return resampled
     

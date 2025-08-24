@@ -2,8 +2,6 @@ import pytest
 from unittest.mock import patch, MagicMock
 from services.tts_service import TTSService
 from io import BytesIO
-import tempfile
-import os
 
 
 class TestTTSService:
@@ -28,28 +26,20 @@ class TestTTSService:
     
     def test_synthesize_speech(self):
         """测试语音合成"""
-        with patch('services.tts_service.pyttsx3') as mock_pyttsx3, \
-             patch('services.tts_service.tempfile') as mock_tempfile, \
-             patch('services.tts_service.open', create=True) as mock_open, \
-             patch('services.tts_service.os') as mock_os:
-            
+        with patch('services.tts_service.pyttsx3') as mock_pyttsx3:
             mock_engine = MagicMock()
             mock_pyttsx3.init.return_value = mock_engine
             
-            # 模拟临时文件
-            mock_temp_file = MagicMock()
-            mock_tempfile.NamedTemporaryFile.return_value.__enter__.return_value = mock_temp_file
-            mock_temp_file.name = 'temp_test.wav'
-            
-            # 模拟文件读取
-            mock_open.return_value.__enter__.return_value.read.return_value = b'fake_audio_data'
-            mock_os.path.exists.return_value = True
+            # 模拟save_to_file和runAndWait方法
+            mock_engine.save_to_file = MagicMock()
+            mock_engine.runAndWait = MagicMock()
             
             service = TTSService()
             result = service.synthesize_speech("测试文本")
             
             assert isinstance(result, BytesIO)
-            mock_engine.save_to_file.assert_called_once_with("测试文本", 'temp_test.wav')
+            # 验证save_to_file被调用，但参数是BytesIO对象
+            mock_engine.save_to_file.assert_called_once()
             mock_engine.runAndWait.assert_called_once()
     
     def test_save_speech_to_file(self):

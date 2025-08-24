@@ -20,6 +20,9 @@ from services.stt_service import STTService
 from services.tts_service import TTSService
 from services.processing import AudioProcessingService
 from services.verification import VoiceVerificationService
+from services.codecs import AudioCodecService
+import io
+import soundfile as sf
 
 router = APIRouter()
 
@@ -35,6 +38,7 @@ stt_service = STTService()
 tts_service = TTSService()
 audio_processing_service = AudioProcessingService()
 voice_verification_service = VoiceVerificationService()
+audio_codec_service = AudioCodecService()
 
 
 @router.post("/chat")
@@ -265,12 +269,19 @@ async def get_user_security_logs(user_id: int, limit: int = 10, db: Session = De
 
 
 @router.post("/users/{user_id}/sessions")
-async def create_user_session(user_id: int, title: str = "默认会话", db: Session = Depends(get_db)):
+async def create_user_session(
+    user_id: int, 
+    title: str = "默认会话", 
+    db: Session = Depends(get_db)
+):
     """
     为用户创建新会话
     """
+    # 确保标题使用UTF-8编码
+    encoded_title = title.encode('utf-8').decode('utf-8')
+    
     # 使用查询参数创建会话
-    session = DatabaseService.create_session(db, user_id=user_id, title=title)
+    session = DatabaseService.create_session(db, user_id=user_id, title=encoded_title)
     
     return {
         "session_id": session.id,
@@ -281,13 +292,43 @@ async def create_user_session(user_id: int, title: str = "默认会话", db: Ses
     }
 
 
+@router.get("/users/{user_id}/sessions")
+async def get_user_sessions(user_id: int, limit: int = 10, db: Session = Depends(get_db)):
+    """
+    获取用户的会话列表
+    
+    Args:
+        user_id: 用户ID
+        limit: 返回的会话数量限制
+        db: 数据库会话
+        
+    Returns:
+        用户的会话列表
+    """
+    sessions = DatabaseService.get_sessions_by_user_id(db, user_id, limit)
+    
+    return {
+        "user_id": user_id,
+        "sessions": [
+            {
+                "id": session.id,
+                "title": session.title,
+                "created_at": session.created_at,
+                "updated_at": session.updated_at,
+                "is_active": bool(session.is_active)
+            }
+            for session in sessions
+        ]
+    }
+
+
 @router.get("/sessions/{session_id}")
 async def get_session_info(session_id: int, db: Session = Depends(get_db)):
     """
     获取会话信息
     """
     session = DatabaseService.get_session_by_id(db, session_id)
-    if not session or session.is_active == 0:
+    if not session or session.is_active == 0: # type: ignore
         raise HTTPException(status_code=404, detail="会话未找到或已删除")
     
     return {
@@ -309,7 +350,7 @@ async def delete_session(session_id: int, db: Session = Depends(get_db)):
     if not success:
         raise HTTPException(status_code=404, detail="会话未找到")
     
-    return {"message": "会话删除成功"}
+    return {"deleted": True, "message": "会话删除成功"}
 
 
 @router.get("/sessions/{session_id}/conversations")
@@ -341,21 +382,26 @@ async def get_session_conversations(session_id: int, db: Session = Depends(get_d
 
 
 @router.post("/audio/transcribe")
-async def transcribe_audio(file: UploadFile = File(...)):
+async def transcribe_audio(file: UploadFile = File(...), 
+                          preprocess: bool = True):
     """
     语音转文本接口
+    
+    Args:
+        file: 上传的音频文件
+        preprocess: 是否对音频进行预处理以提高识别准确率
     """
     try:
         # 读取上传的音频文件
         contents = await file.read()
         
         # 使用STT服务进行转录
-        # 注意：这里简化处理，实际项目中可能需要保存文件或进行其他处理
-        text = stt_service.transcribe_audio(contents)  # type: ignore
+        text = stt_service.transcribe_audio(contents, preprocess)  # type: ignore
         
         return {
             "filename": file.filename,
-            "transcribed_text": text
+            "transcribed_text": text,
+            "preprocess_applied": preprocess
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"转录失败: {str(e)}")
@@ -368,8 +414,14 @@ async def synthesize_audio(request: Dict[str, Any]):
     """
     try:
         text = request.get("text", "")
+        rate = request.get("rate", 150)
+        volume = request.get("volume", 0.9)
+        
         if not text:
             raise HTTPException(status_code=400, detail="文本内容不能为空")
+        
+        # 设置语音属性
+        tts_service.set_voice_properties(rate=rate, volume=volume)
         
         # 使用TTS服务合成语音
         audio_buffer = tts_service.synthesize_speech(text)
@@ -377,6 +429,8 @@ async def synthesize_audio(request: Dict[str, Any]):
         # 返回音频数据
         return {
             "text": text,
+            "rate": rate,
+            "volume": volume,
             "audio_data": audio_buffer.getvalue()  # 获取字节数据
         }
     except Exception as e:
@@ -386,27 +440,43 @@ async def synthesize_audio(request: Dict[str, Any]):
 @router.post("/audio/process")
 async def process_audio(file: UploadFile = File(...), 
                        target_rate: int = 16000,
-                       target_rms: float = 0.1):
+                       target_rms: float = 0.1,
+                       silence_threshold: float = 0.01):
     """
     音频预处理接口
+    
+    Args:
+        file: 上传的音频文件
+        target_rate: 目标采样率
+        target_rms: 目标均方根值
+        silence_threshold: 静音阈值
     """
     try:
         # 读取上传的音频文件
         contents = await file.read()
         
-        # 这里简化处理，实际项目中需要解析音频数据
-        # 我们模拟一些音频数据进行处理
-        import numpy as np
-        audio_data = np.frombuffer(contents[:1000], dtype=np.int16).astype(np.float32) / 32768.0
+        # 使用AudioCodecService解码音频文件
+        try:
+            audio_data, original_rate = audio_codec_service.decode_wav(contents)
+        except:
+            # 如果WAV解码失败，尝试使用soundfile解码
+            audio_buffer = io.BytesIO(contents)
+            audio_data, original_rate = sf.read(audio_buffer)
         
         # 使用音频处理服务进行预处理
         processed_audio = audio_processing_service.preprocess_audio(
-            audio_data, 16000, target_rate, target_rms)
+            audio_data, original_rate, target_rate, target_rms, silence_threshold)
+        
+        # 将处理后的音频编码为WAV格式
+        processed_wav = audio_codec_service.encode_wav(processed_audio, target_rate)
         
         return {
             "filename": file.filename,
             "original_length": len(audio_data),
             "processed_length": len(processed_audio),
+            "original_rate": original_rate,
+            "target_rate": target_rate,
+            "processed_audio": processed_wav,
             "message": "音频预处理完成"
         }
     except Exception as e:

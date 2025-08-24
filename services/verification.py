@@ -1,6 +1,7 @@
 import numpy as np
 from typing import List, Tuple, Optional
 import hashlib
+from scipy.fftpack import dct
 
 
 class VoiceVerificationService:
@@ -24,10 +25,9 @@ class VoiceVerificationService:
         Returns:
             声纹特征向量
         """
-        # 简化的声纹特征提取方法
-        # 实际项目中可以使用更复杂的特征提取算法
+        # 使用更全面的声纹特征提取方法
         
-        # 1. 计算音频的基本统计特征
+        # 1. 计算基本统计特征
         mean_amplitude = np.mean(np.abs(audio_data))
         std_amplitude = np.std(audio_data)
         zero_crossing_rate = self._calculate_zero_crossing_rate(audio_data)
@@ -37,7 +37,10 @@ class VoiceVerificationService:
         energy_low, energy_mid, energy_high = self._calculate_frequency_bands_energy(
             audio_data, sample_rate)
         
-        # 3. 组合特征向量
+        # 3. 计算MFCC特征
+        mfcc_features = self._extract_mfcc(audio_data, sample_rate)
+        
+        # 4. 组合所有特征向量
         features = [
             mean_amplitude,
             std_amplitude,
@@ -47,6 +50,9 @@ class VoiceVerificationService:
             energy_mid,
             energy_high
         ]
+        
+        # 添加MFCC特征
+        features.extend(mfcc_features)
         
         return features
     
@@ -214,3 +220,73 @@ class VoiceVerificationService:
             del self.user_voiceprints[user_id]
             return True
         return False
+    
+    def _extract_mfcc(self, audio_data: np.ndarray, sample_rate: int, 
+                      num_mfcc: int = 13) -> List[float]:
+        """
+        提取MFCC（梅尔频率倒谱系数）特征
+        
+        Args:
+            audio_data: 音频数据数组
+            sample_rate: 采样率
+            num_mfcc: 要提取的MFCC系数数量
+            
+        Returns:
+            MFCC特征向量
+        """
+        # 预加重
+        pre_emphasis = 0.97
+        emphasized_signal = np.append(audio_data[0], audio_data[1:] - pre_emphasis * audio_data[:-1])
+        
+        # 分帧
+        frame_size = 0.025  # 25ms
+        frame_stride = 0.01  # 10ms
+        frame_length = int(round(frame_size * sample_rate))
+        frame_step = int(round(frame_stride * sample_rate))
+        signal_length = len(emphasized_signal)
+        num_frames = int(np.ceil(float(np.abs(signal_length - frame_length)) / frame_step)) + 1
+        pad_signal_length = num_frames * frame_step + frame_length
+        z = np.zeros((pad_signal_length - signal_length))
+        pad_signal = np.append(emphasized_signal, z)
+        
+        # 提取帧
+        indices = np.tile(np.arange(0, frame_length), (num_frames, 1)) + np.tile(
+            np.arange(0, num_frames * frame_step, frame_step), (frame_length, 1)).T
+        frames = pad_signal[indices.astype(np.int32, copy=False)]
+        
+        # 加窗
+        frames *= np.hamming(frame_length)
+        
+        # FFT和功率谱
+        NFFT = 512
+        mag_frames = np.absolute(np.fft.rfft(frames, NFFT))
+        pow_frames = ((1.0 / NFFT) * ((mag_frames) ** 2))
+        
+        # 计算梅尔滤波器组
+        nfilt = 40
+        low_freq_mel = 0
+        high_freq_mel = (2595 * np.log10(1 + (sample_rate / 2) / 700))
+        mel_points = np.linspace(low_freq_mel, high_freq_mel, nfilt + 2)
+        hz_points = (700 * (10**(mel_points / 2595) - 1))
+        bin = np.floor((NFFT + 1) * hz_points / sample_rate)
+        fbank = np.zeros((nfilt, int(np.floor(NFFT / 2 + 1))))
+        
+        for m in range(1, nfilt + 1):
+            f_m_minus = int(bin[m - 1])
+            f_m = int(bin[m])
+            f_m_plus = int(bin[m + 1])
+            
+            for k in range(f_m_minus, f_m):
+                fbank[m - 1, k] = (k - bin[m - 1]) / (bin[m] - bin[m - 1])
+            for k in range(f_m, f_m_plus):
+                fbank[m - 1, k] = (bin[m + 1] - k) / (bin[m + 1] - bin[m])
+        
+        filter_banks = np.dot(pow_frames, fbank.T)
+        filter_banks = np.where(filter_banks == 0, np.finfo(float).eps, filter_banks)
+        filter_banks = 20 * np.log10(filter_banks)
+        
+        # DCT变换得到MFCC
+        mfcc = dct(filter_banks, type=2, axis=1, norm='ortho')[:, :num_mfcc]
+        
+        # 返回平均MFCC系数作为特征
+        return np.mean(mfcc, axis=0).tolist()

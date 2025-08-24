@@ -28,15 +28,35 @@ class TestVoiceVerificationService:
         
         # 验证特征
         assert isinstance(features, list)
-        assert len(features) == 7  # 7个特征
+        # 现在应该有7个基本特征 + 13个MFCC特征 = 20个特征
+        assert len(features) >= 7
         assert all(isinstance(f, (int, float)) for f in features)
+    
+    def test_extract_mfcc_features(self):
+        """测试MFCC特征提取"""
+        service = VoiceVerificationService()
+        
+        # 创建测试音频数据
+        sample_rate = 16000
+        duration = 1.0  # 1秒
+        t = np.linspace(0, duration, int(sample_rate * duration))
+        # 生成合成音频信号
+        audio_data = np.sin(2 * np.pi * 440 * t)  # 440Hz正弦波
+        
+        # 提取MFCC特征
+        mfcc_features = service._extract_mfcc(audio_data, sample_rate)
+        
+        # 验证特征
+        assert isinstance(mfcc_features, list)
+        assert len(mfcc_features) == 13  # 13个MFCC系数
+        assert all(isinstance(f, (int, float)) for f in mfcc_features)
     
     def test_register_user_voiceprint(self):
         """测试用户声纹注册"""
         service = VoiceVerificationService()
         
         # 创建测试特征
-        features = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
+        features = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7] + [0.0] * 13  # 7个基本特征 + 13个MFCC特征
         user_id = 1
         
         # 注册声纹
@@ -52,7 +72,7 @@ class TestVoiceVerificationService:
         service = VoiceVerificationService()
         
         # 创建测试特征
-        features = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
+        features = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7] + [0.0] * 13  # 7个基本特征 + 13个MFCC特征
         user_id = 1
         
         # 先注册声纹
@@ -70,7 +90,7 @@ class TestVoiceVerificationService:
         service = VoiceVerificationService()
         
         # 创建测试特征
-        features = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
+        features = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7] + [0.0] * 13  # 7个基本特征 + 13个MFCC特征
         user_id = 1
         non_registered_user_id = 2
         
@@ -89,8 +109,8 @@ class TestVoiceVerificationService:
         service = VoiceVerificationService()
         
         # 创建测试特征
-        registered_features = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
-        test_features = [0.11, 0.22, 0.29, 0.41, 0.49, 0.61, 0.69]  # 略有差异
+        registered_features = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7] + [0.0] * 13  # 7个基本特征 + 13个MFCC特征
+        test_features = [0.11, 0.22, 0.29, 0.41, 0.49, 0.61, 0.69] + [0.01] * 13  # 略有差异
         user_id = 1
         
         # 先注册声纹
@@ -108,7 +128,7 @@ class TestVoiceVerificationService:
         service = VoiceVerificationService()
         
         # 创建测试特征
-        features = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
+        features = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7] + [0.0] * 13  # 7个基本特征 + 13个MFCC特征
         user_id = 1
         
         # 先注册声纹

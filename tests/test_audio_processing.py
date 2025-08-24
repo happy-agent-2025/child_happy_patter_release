@@ -122,7 +122,7 @@ class TestAudioProcessingService:
         """测试完整的音频预处理流程"""
         service = AudioProcessingService()
         original_rate = 16000
-        target_rate = 16000
+        target_rate = 8000
         
         # 创建测试音频数据
         silent_part = np.zeros(1000)

@@ -3,6 +3,14 @@ from unittest.mock import patch, MagicMock
 from services.stt_service import STTService
 
 
+class MockAudioData:
+    """模拟AudioData对象"""
+    def __init__(self, sample_rate, frame_data, sample_width):
+        self.sample_rate = sample_rate
+        self.frame_data = frame_data
+        self.sample_width = sample_width
+
+
 class TestSTTService:
     """测试STTService类"""
     
@@ -54,19 +62,15 @@ class TestSTTService:
         with patch('services.stt_service.sr') as mock_sr:
             mock_recognizer = MagicMock()
             mock_sr.Recognizer.return_value = mock_recognizer
-            mock_audio = MagicMock()
-            mock_sr.AudioFile.return_value.__enter__.return_value = mock_audio
             
-            # 模拟音频属性
-            mock_audio.sample_rate = 16000
-            mock_audio.frame_data = b'fake_data' * 1600  # 0.1秒的音频
-            mock_audio.sample_width = 2
+            # 模拟recognizer.record方法的返回值
+            mock_audio_data = MockAudioData(16000, b'fake_data' * 1600, 2)
+            mock_recognizer.record.return_value = mock_audio_data
+            
+            mock_sr.AudioFile.return_value.__enter__.return_value = MagicMock()
             
             service = STTService()
             result = service.get_audio_info("fake_audio_file.wav")  # type: ignore
-            
-            # 使用MagicMock对象的return_value来设置返回值
-            mock_audio.sample_rate = 16000
             
             assert "sample_rate" in result
             assert "duration" in result

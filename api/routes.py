@@ -265,12 +265,12 @@ async def get_user_security_logs(user_id: int, limit: int = 10, db: Session = De
 
 
 @router.post("/users/{user_id}/sessions")
-async def create_user_session(user_id: int, request: Dict[str, Any], db: Session = Depends(get_db)):
+async def create_user_session(user_id: int, title: str = "默认会话", db: Session = Depends(get_db)):
     """
     为用户创建新会话
     """
-    session_title = request.get("title", f"会话 {user_id}")
-    session = DatabaseService.create_session(db, user_id, session_title)
+    # 使用查询参数创建会话
+    session = DatabaseService.create_session(db, user_id=user_id, title=title)
     
     return {
         "session_id": session.id,

@@ -23,7 +23,7 @@ class TestAPIRoutes:
         response = self.client.get("/")
         assert response.status_code == 200
         assert "message" in response.json()
-        assert response.json()["message"] == "Welcome to Happy Partner - 儿童教育AI系统"
+        assert response.json()["message"] == "儿童教育AI系统API服务"
 
     def test_chat_endpoint_safety_route(self):
         """测试聊天端点 - 安全路由"""

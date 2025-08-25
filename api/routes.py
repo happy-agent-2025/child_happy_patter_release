@@ -121,11 +121,18 @@ async def safety_check(request: SafetyCheckRequest, db: Session = Depends(get_db
         db,
         user_id=request.user_id if request.user_id is not None else 1,
         content=request.content,
-        is_safe=result.get("is_safe", True),
-        filtered_content=result.get("filtered_content", request.content)
+        is_safe=result.get("result", {}).get("is_safe", True),
+        filtered_content=result.get("result", {}).get("filtered_content", request.content)
     )
     
-    return result
+    # 转换为正确的响应格式
+    safety_result = result.get("result", {})
+    return SafetyCheckResponse(
+        is_safe=safety_result.get("is_safe", True),
+        reason=safety_result.get("issues", ["无"])[0] if safety_result.get("issues") else "无",
+        confidence=0.95 if safety_result.get("is_safe", True) else 0.85,
+        suggested_content=safety_result.get("filtered_content") if not safety_result.get("is_safe", True) else None
+    )
 
 
 @router.post("/edu/ask", response_model=EduQuestionResponse)
@@ -153,7 +160,13 @@ async def edu_ask(request: EduQuestionRequest, db: Session = Depends(get_db)):
         agent_response=json.dumps(result, ensure_ascii=False)
     )
     
-    return result
+    # 转换为正确的响应格式
+    return EduQuestionResponse(
+        answer=result.get("answer", "抱歉，我无法回答这个问题。"),
+        explanation=None,  # 当前edu_agent未提供详细解释
+        related_topics=None,  # 当前edu_agent未提供相关主题
+        difficulty_level=None  # 当前edu_agent未提供难度级别
+    )
 
 
 @router.post("/emotion/support", response_model=EmotionSupportResponse)
@@ -244,9 +257,9 @@ async def get_user_conversations(user_id: int, limit: int = 10, db: Session = De
                 user_id=getattr(conv, 'user_id', 0),
                 session_id=getattr(conv, 'session_id', None),
                 agent_type=getattr(conv, 'agent_type', ""),
-                conversation_history=getattr(conv, 'conversation_history', ""),
-                created_at=getattr(conv, 'created_at'),
-                updated_at=getattr(conv, 'updated_at')
+                conversation_history=json.dumps(getattr(conv, 'conversation_history', []), ensure_ascii=False),
+                created_at=getattr(conv, 'created_at', datetime.now()),
+                updated_at=getattr(conv, 'updated_at', datetime.now())
             )
             for conv in conversations
         ]
@@ -273,9 +286,9 @@ async def get_user_recent_conversations(user_id: int, limit: int = 10, db: Sessi
                 user_id=getattr(conv, 'user_id', 0),
                 session_id=getattr(conv, 'session_id', None),
                 agent_type=getattr(conv, 'agent_type', ""),
-                conversation_history=getattr(conv, 'conversation_history', ""),
-                created_at=getattr(conv, 'created_at'),
-                updated_at=getattr(conv, 'updated_at')
+                conversation_history=json.dumps(getattr(conv, 'conversation_history', []), ensure_ascii=False),
+                created_at=getattr(conv, 'created_at', datetime.now()),
+                updated_at=getattr(conv, 'updated_at', datetime.now())
             )
             for conv in conversations
         ]
@@ -303,9 +316,9 @@ async def get_user_conversation_by_agent(user_id: int, agent_type: str, db: Sess
             "user_id": getattr(conversation, 'user_id', 0),
             "session_id": getattr(conversation, 'session_id', None),
             "agent_type": getattr(conversation, 'agent_type', ""),
-            "conversation_history": getattr(conversation, 'conversation_history', ""),
-            "created_at": getattr(conversation, 'created_at'),
-            "updated_at": getattr(conversation, 'updated_at')
+            "conversation_history": json.dumps(getattr(conversation, 'conversation_history', []), ensure_ascii=False),
+            "created_at": getattr(conversation, 'created_at', datetime.now()),
+            "updated_at": getattr(conversation, 'updated_at', datetime.now())
         }
     }
 
@@ -330,7 +343,7 @@ async def get_user_security_logs(user_id: int, limit: int = 10, db: Session = De
                 content=getattr(log, 'content', ""),
                 is_safe=bool(getattr(log, 'is_safe', True)),
                 filtered_content=getattr(log, 'filtered_content', None),
-                created_at=getattr(log, 'created_at')
+                created_at=getattr(log, 'created_at', datetime.now())
             )
             for log in logs
         ]
@@ -441,9 +454,9 @@ async def get_session_conversations(session_id: int, db: Session = Depends(get_d
                 "user_id": getattr(conv, 'user_id', 0),
                 "session_id": getattr(conv, 'session_id', None),
                 "agent_type": getattr(conv, 'agent_type', ""),
-                "conversation_history": getattr(conv, 'conversation_history', ""),
-                "created_at": getattr(conv, 'created_at'),
-                "updated_at": getattr(conv, 'updated_at')
+                "conversation_history": json.dumps(getattr(conv, 'conversation_history', []), ensure_ascii=False),
+                "created_at": getattr(conv, 'created_at', datetime.now()),
+                "updated_at": getattr(conv, 'updated_at', datetime.now())
             }
             for conv in conversations
         ]

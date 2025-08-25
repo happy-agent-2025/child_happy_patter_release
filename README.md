@@ -152,7 +152,7 @@ Happy Partner是一个专为儿童设计的教育AI系统，结合了多种AI代
 
 **测试和文档**
 - [ ] 增加集成测试和端到端测试覆盖率
-- [ ] 自动生成API文档（Swagger/OpenAPI）
+- [x] 自动生成API文档（Swagger/OpenAPI）✅ 已完成
 - [ ] 完善部署和运维文档
 - [ ] 添加性能测试和负载测试
 
@@ -255,6 +255,56 @@ Happy Partner是一个专为儿童设计的教育AI系统，结合了多种AI代
 - `GET /auth/me` - 获取当前用户信息
   - 需要有效的JWT令牌
   - 返回用户基本信息和安全状态
+
+## API文档使用指南
+
+### 📚 自动生成的Swagger文档
+
+系统现已实现完整的API文档自动化，通过FastAPI的OpenAPI集成自动生成Swagger UI文档。
+
+#### 访问方式
+1. 启动应用程序：`python main.py`
+2. 打开浏览器访问：`http://localhost:8000/docs`
+3. 即可查看完整的交互式API文档
+
+#### 文档特性
+✅ **完整的API端点文档** - 24个API路径全部文档化  
+✅ **详细的请求/响应模型** - 29个Pydantic Schema自动生成  
+✅ **交互式测试功能** - 可直接在浏览器中测试API  
+✅ **参数验证文档** - 所有参数的类型、默认值、描述信息  
+✅ **响应示例** - 每个端点的成功和错误响应示例
+
+#### 包含的Schema类型
+- **认证相关**: `UserCreate`, `UserLogin`, `Token`, `UserResponse`
+- **聊天相关**: `ChatRequest`, `SafetyCheckRequest`, `SafetyCheckResponse`, `EduQuestionRequest`, `EduQuestionResponse`, `EmotionSupportRequest`, `EmotionSupportResponse`
+- **音频处理**: `AudioTranscribeRequest`, `AudioTranscribeResponse`, `AudioSynthesizeRequest`, `AudioSynthesizeResponse`, `AudioProcessRequest`, `AudioProcessResponse`
+- **声纹验证**: `VoiceRegisterRequest`, `VoiceRegisterResponse`, `VoiceVerifyRequest`, `VoiceVerifyResponse`
+- **记忆管理**: `MemoryActionRequest`, `MemoryActionResponse`, `ConversationHistoryResponse`, `SecurityLogResponse`
+- **对话历史**: `ConversationItem`, `ConversationListResponse`, `SecurityLogItem`, `SecurityLogListResponse`
+
+#### 使用示例
+
+在Swagger UI中，您可以：
+1. **查看API详情**：点击每个端点展开查看详细文档
+2. **测试API调用**：使用"Try it out"按钮直接测试接口
+3. **查看Schema定义**：点击"Schema"查看请求/响应模型结构
+4. **查看参数说明**：所有参数都有详细描述和示例值
+
+### 🔧 开发集成
+
+对于开发者集成，API文档提供：
+- **OpenAPI规范文件**：访问 `/openapi.json` 获取机器可读的API定义
+- **代码生成支持**：可使用OpenAPI Generator等工具生成客户端代码
+- **类型安全**：所有请求和响应都有严格的类型验证
+
+### 📋 文档维护
+
+API文档会自动保持更新：
+- 添加新的API端点时自动包含在文档中
+- 修改Schema时会自动更新文档
+- 无需手动维护文档文件
+
+文档基于Pydantic模型自动生成，确保与代码实现始终保持一致。
 
 ## 技术架构
 

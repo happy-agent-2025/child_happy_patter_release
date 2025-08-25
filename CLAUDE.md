@@ -68,3 +68,4 @@ python db/init_db.py
 - `archive_old_conversations()`：归档并压缩旧对话
 - `delete_old_conversations()`：删除指定天数前的对话
 - 使用zlib压缩进行存储优化
+- 始终以中文回答

@@ -2,7 +2,7 @@ import sys
 import os
 
 # 添加项目根目录到Python路径
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -30,7 +30,7 @@ def init_db():
     
     # 创建所有表
     Base.metadata.create_all(bind=engine)
-    logger.info("数据库初始化完成，所有表已创建")
+    logger.info("Database initialization completed, all tables created")
 
 if __name__ == "__main__":
     init_db()

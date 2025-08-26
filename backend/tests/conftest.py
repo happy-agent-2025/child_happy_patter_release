@@ -4,7 +4,7 @@ import os
 import asyncio
 
 # 添加项目根目录到Python路径
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # 在Windows上设置事件循环策略以避免警告
 if sys.platform == "win32":

@@ -52,31 +52,71 @@ class EduAgent:
     
     def _get_subject_context(self, question: str) -> str:
         """
-        根据问题内容判断可能涉及的学科领域
+        使用大模型分析问题涉及的学科领域
+        """
+        # 构造提示词
+        prompt = f"""
+        请分析以下问题最适合归类到哪个学科领域：
+        
+        问题: "{question}"
+        
+        可选的学科包括：{', '.join(self.subjects)}
+        
+        请直接回答最相关的学科名称，如果不确定，请回答"通用"。
+        """
+        
+        messages = [
+            {"role": "system", "content": "你是一个教育领域的专家，能够准确判断问题所属的学科。"},
+            {"role": "user", "content": prompt}
+        ]
+        
+        # 调用OpenAI API进行学科判断
+        try:
+            response = openai_client.chat_completion(
+                messages=messages,
+                temperature=0.1,
+                max_tokens=10
+            )
+            subject = response.strip()
+            # 验证返回的学科是否在我们的学科列表中
+            if subject in self.subjects:
+                return subject
+            else:
+                # 如果返回的学科不在列表中，回退到关键词匹配
+                return self._fallback_subject_detection(question)
+        except Exception as e:
+            # 如果API调用失败，回退到关键词匹配
+            return self._fallback_subject_detection(question)
+    
+    def _fallback_subject_detection(self, question: str) -> str:
+        """
+        当大模型分析失败时的回退方案 - 基于关键词的简单匹配
         """
         question_lower = question.lower()
         
         # 简单的关键词匹配来判断学科
-        if any(keyword in question_lower for keyword in ['加', '减', '乘', '除', '数', '几何', '算']):
+        if any(keyword in question_lower for keyword in ['加', '减', '乘', '除', '数', '几何', '算', '平行四边形', '1+1']):
             return "数学"
-        elif any(keyword in question_lower for keyword in ['读', '写', '诗', '词', '句', '文章']):
+        elif any(keyword in question_lower for keyword in ['读', '写', '诗', '词', '句', '文章', '李白']):
             return "语文"
         elif any(keyword in question_lower for keyword in ['英语', '英文', '单词', '字母']):
             return "英语"
-        elif any(keyword in question_lower for keyword in ['植物', '动物', '实验', '科学', '物理', '化学']):
+        elif any(keyword in question_lower for keyword in ['植物', '动物', '实验', '科学', '物理', '化学', '光合作用']):
             return "科学"
-        elif any(keyword in question_lower for keyword in ['历史', '古代', '皇帝', '朝代']):
+        elif any(keyword in question_lower for keyword in ['历史', '古代', '皇帝', '朝代', '长城']):
             return "历史"
-        elif any(keyword in question_lower for keyword in ['地理', '国家', '城市', '气候', '地图']):
+        elif any(keyword in question_lower for keyword in ['地理', '国家', '城市', '气候', '地图', '首都']):
             return "地理"
-        elif any(keyword in question_lower for keyword in ['音乐', '歌曲', '乐器']):
+        elif any(keyword in question_lower for keyword in ['音乐', '歌曲', '乐器', '钢琴']):
             return "音乐"
-        elif any(keyword in question_lower for keyword in ['画', '颜色', '艺术']):
+        elif any(keyword in question_lower for keyword in ['画', '颜色', '艺术', '梵高']):
             return "艺术"
-        elif any(keyword in question_lower for keyword in ['运动', '体育', '健康']):
+        elif any(keyword in question_lower for keyword in ['运动', '体育', '健康', '游泳']):
             return "体育"
-        elif any(keyword in question_lower for keyword in ['道德', '法律', '规则', '社会']):
+        elif any(keyword in question_lower for keyword in ['道德', '法律', '规则', '社会', '交通规则']):
             return "道德与法治"
+        elif any(keyword in question_lower for keyword in ['人工智能', '信息技术', '电脑']):
+            return "信息技术"
         else:
             return "通用"
     

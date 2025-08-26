@@ -21,26 +21,67 @@ class EmotionAgent:
         8. 在必要时建议寻求成人帮助
         """
         
-        # 定义常见情绪类型
-        self.emotion_types = [
-            "开心", "难过", "愤怒", "害怕", "惊讶", "厌恶", "焦虑", "孤独", "兴奋", "困惑"
-        ]
+        # 定义常见情绪类型和应对策略
+        self.emotions = {
+            "开心": {
+                "description": "感到高兴、愉快",
+                "response_strategy": "分享孩子的喜悦，鼓励他们继续保持积极心态"
+            },
+            "难过": {
+                "description": "感到沮丧、悲伤",
+                "response_strategy": "给予安慰和理解，帮助孩子表达情感"
+            },
+            "愤怒": {
+                "description": "感到生气、恼火",
+                "response_strategy": "帮助孩子理解愤怒的原因，引导他们用合适的方式表达"
+            },
+            "害怕": {
+                "description": "感到恐惧、担心",
+                "response_strategy": "提供安全感，帮助孩子面对恐惧"
+            },
+            "惊讶": {
+                "description": "感到意外、震惊",
+                "response_strategy": "与孩子一起探索新奇事物，鼓励好奇心"
+            },
+            "厌恶": {
+                "description": "感到反感、不喜欢",
+                "response_strategy": "尊重孩子的感受，帮助他们理解自己的喜好"
+            },
+            "焦虑": {
+                "description": "感到紧张、不安",
+                "response_strategy": "提供放松建议，帮助孩子缓解焦虑"
+            },
+            "孤独": {
+                "description": "感到孤单、寂寞",
+                "response_strategy": "给予陪伴感，鼓励孩子与他人建立联系"
+            },
+            "兴奋": {
+                "description": "感到激动、热情",
+                "response_strategy": "分享孩子的兴奋，引导他们合理表达热情"
+            },
+            "困惑": {
+                "description": "感到迷茫、不解",
+                "response_strategy": "耐心解答疑问，鼓励孩子继续探索"
+            }
+        }
     
     def analyze_emotion(self, content: str) -> Dict[str, Any]:
         """
         分析用户表达的情绪
         """
         # 构造提示词
+        emotion_types = list(self.emotions.keys())
         prompt = f"""
         请分析以下孩子表达的内容中体现的情绪：
         "{content}"
         
-        可能的情绪类型包括：{', '.join(self.emotion_types)}
+        可能的情绪类型包括：{', '.join(emotion_types)}
         
         请按以下格式回复：
         情绪类型: [主要情绪]
         情绪强度: [低/中/高]
         分析理由: [简要说明判断依据]
+        应对建议: [针对该情绪的初步应对建议]
         """
         
         messages = [
@@ -60,7 +101,8 @@ class EmotionAgent:
         result = {
             "emotion": "未知",
             "intensity": "中",
-            "reason": "默认分析"
+            "reason": "默认分析",
+            "suggestion": "一般性关怀"
         }
         
         for line in lines:
@@ -70,6 +112,8 @@ class EmotionAgent:
                 result["intensity"] = line.replace("情绪强度:", "").strip()
             elif line.startswith("分析理由:"):
                 result["reason"] = line.replace("分析理由:", "").strip()
+            elif line.startswith("应对建议:"):
+                result["suggestion"] = line.replace("应对建议:", "").strip()
         
         return result
     
@@ -79,19 +123,30 @@ class EmotionAgent:
         """
         emotion = emotion_analysis.get("emotion", "未知")
         intensity = emotion_analysis.get("intensity", "中")
+        suggestion = emotion_analysis.get("suggestion", "")
+        
+        # 获取情绪对应的应对策略
+        emotion_info = self.emotions.get(emotion, {
+            "description": "一般情绪",
+            "response_strategy": "提供通用的情感支持"
+        })
         
         # 构造提示词
         prompt = f"""
         一个孩子表达了以下内容: "{content}"
         情绪分析结果: 情绪类型为{emotion}，强度为{intensity}
+        情绪描述: {emotion_info["description"]}
+        初步应对建议: {suggestion}
+        推荐应对策略: {emotion_info["response_strategy"]}
         
         请根据以下要求提供情感支持：
         1. 表达理解和共情
         2. 给予适当安慰
         3. 保持积极正面的态度
         4. 鼓励孩子表达更多感受
-        5. 在必要时给出建设性建议
+        5. 结合推荐应对策略给出建设性建议
         6. 用温暖、友善的语言
+        7. 如果情绪强度很高，建议寻求成人帮助
         """
         
         messages = [
@@ -114,9 +169,19 @@ class EmotionAgent:
         """
         content = request.get("content", "")
         user_id = request.get("user_id", "unknown_user")
+        emotion_type = request.get("emotion_type", None)
         
-        # 分析情绪
-        emotion_analysis = self.analyze_emotion(content)
+        # 如果指定了情绪类型，直接使用
+        if emotion_type and emotion_type in self.emotions:
+            emotion_analysis = {
+                "emotion": emotion_type,
+                "intensity": "中",
+                "reason": "用户指定",
+                "suggestion": self.emotions[emotion_type]["response_strategy"]
+            }
+        else:
+            # 分析情绪
+            emotion_analysis = self.analyze_emotion(content)
         
         # 提供情感支持
         support_response = self.provide_emotional_support(content, emotion_analysis)

@@ -1,5 +1,6 @@
 from typing import Dict, Any, List
 from utils.openai_client import openai_client
+import re
 
 
 class SafetyAgent:
@@ -20,11 +21,54 @@ class SafetyAgent:
         7. 禁止不实医疗、健康建议
         8. 禁止歧视性、仇恨性言论
         """
+        
+        # 定义敏感关键词列表（第一层过滤）
+        self.sensitive_keywords = {
+            # 暴力相关
+            'violence': ['暴力', '打斗', '武器', '刀', '枪', '血腥', '死亡', '杀害', '伤害', '打架'],
+            # 成人内容相关
+            'adult': ['色情', '性爱', '裸体', '成人', '性暗示', '性行为'],
+            # 危险行为相关
+            'dangerous': ['自杀', '自残', '毒品', '酗酒', '吸烟', '危险动作', '炸药', '爆炸'],
+            # 隐私信息相关
+            'privacy': ['身份证', '手机号', '地址', '密码', '银行卡', '账号', '身份证号'],
+            # 仇恨言论相关
+            'hate': ['歧视', '仇恨', '种族主义', '性别歧视', '宗教歧视', '骂人']
+        }
+    
+    def _pre_filter_content(self, content: str) -> Dict[str, Any]:
+        """
+        第一层过滤：基于关键词的快速过滤
+        """
+        issues = []
+        is_safe = True
+        
+        # 检查内容中是否包含敏感关键词
+        for category, keywords in self.sensitive_keywords.items():
+            for keyword in keywords:
+                if keyword in content:  # 使用简单的包含检查而不是正则表达式
+                    issues.append(f"检测到{category}相关敏感内容: {keyword}")
+                    is_safe = False
+        
+        return {
+            "is_safe": is_safe,
+            "issues": issues
+        }
     
     def filter_content(self, content: str) -> Dict[str, Any]:
         """
-        使用OpenAI智能过滤内容中的敏感信息
+        使用OpenAI智能过滤内容中的敏感信息（第二层过滤）
         """
+        # 先进行关键词预过滤
+        pre_filter_result = self._pre_filter_content(content)
+        if not pre_filter_result["is_safe"]:
+            return {
+                "original_content": content,
+                "is_safe": False,
+                "issues": pre_filter_result["issues"],
+                "filtered_content": "[内容包含敏感信息，已被过滤]"
+            }
+        
         # 构造提示词
         prompt = f"""
         你是一个专业的儿童内容安全审查员，请根据以下安全指导原则审查用户内容：

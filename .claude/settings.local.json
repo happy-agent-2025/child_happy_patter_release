@@ -4,7 +4,12 @@
       "Bash(python -m pytest:*)",
       "Bash(curl -X GET http://localhost:8000/api/auth/register)",
       "Bash(curl -X GET http://localhost:8000/api/)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(npm create:*)",
+      "Bash(npm install)",
+      "Bash(dir:*)",
+      "Bash(npm run dev)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []

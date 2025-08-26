@@ -1,17 +1,28 @@
 import React from 'react'
 import { ConfigProvider } from 'antd'
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import zhCN from 'antd/locale/zh_CN'
+import Layout from './components/Layout'
+import ChatPage from './pages/ChatPage'
+import LoginPage from './pages/LoginPage'
 import './App.css'
 
 function App() {
   return (
     <ConfigProvider locale={zhCN}>
-      <div className="App">
-        <header className="App-header">
-          <h1>Happy Partner - 儿童教育AI系统</h1>
-          <p>前端界面开发中...</p>
-        </header>
-      </div>
+      <Router>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/*" element={
+            <Layout>
+              <Routes>
+                <Route path="/" element={<ChatPage />} />
+                <Route path="/chat" element={<ChatPage />} />
+              </Routes>
+            </Layout>
+          } />
+        </Routes>
+      </Router>
     </ConfigProvider>
   )
 }

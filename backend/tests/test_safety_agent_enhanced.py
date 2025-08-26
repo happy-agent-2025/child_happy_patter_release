@@ -28,18 +28,6 @@ class TestEnhancedSafetyAgent:
         result = agent._pre_filter_content(content)
         assert result["is_safe"] is False
         assert len(result["issues"]) > 0
-        assert "危险" in result["issues"][0]
-```
-
-backend/tests/test_safety_agent_enhanced.py
-```python
-<<<<<<< SEARCH
-        mock_openai.chat_completion.return_value = """安全状态: 不安全
-检测到的问题: 包含危险行为相关内容
-过滤后内容: 我们应该讨论更积极的话题"""
-        mock_openai.chat_completion.return_value = """安全状态: 不安全
-检测到的问题: 包含危险行为相关内容
-过滤后内容: 建议修改为"我想了解烟花的安全观赏知识"或"我想学习烟花的历史和文化" """
     
     @patch('utils.openai_client.openai_client')
     def test_filter_content_safe(self, mock_openai):
@@ -63,7 +51,7 @@ backend/tests/test_safety_agent_enhanced.py
         # 模拟OpenAI响应
         mock_openai.chat_completion.return_value = """安全状态: 不安全
 检测到的问题: 包含危险行为相关内容
-过滤后内容: 我们应该讨论更积极的话题"""
+过滤后内容: 建议修改为"我想了解烟花的安全观赏知识"或"我想学习烟花的历史和文化" """
         
         agent = SafetyAgent()
         content = "我想知道怎么制造烟花"

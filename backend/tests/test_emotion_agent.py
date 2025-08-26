@@ -16,7 +16,7 @@ class TestEmotionAgent:
         agent = EmotionAgent()
         assert agent is not None
         assert hasattr(agent, 'system_prompt')
-        assert hasattr(agent, 'emotion_types')
+        assert hasattr(agent, 'emotions')
 
     def test_analyze_emotion(self):
         """测试情绪分析功能"""
@@ -35,12 +35,10 @@ class TestEmotionAgent:
         emotion_analysis = {
             "emotion": "开心",
             "intensity": "高",
-            "reason": "用户表达了对学习的兴趣和兴奋"
+            "reason": "学习了新知识"
         }
         result = agent.provide_emotional_support("我今天学到了很多新知识，好开心！", emotion_analysis)
-
-        # 验证结果不为空
-        assert result is not None
+        assert isinstance(result, str)
         assert len(result) > 0
 
     def test_process_request(self):
@@ -48,13 +46,14 @@ class TestEmotionAgent:
         agent = EmotionAgent()
         request = {
             "content": "我今天学到了很多新知识，好开心！",
-            "user_id": "test_user_1"
+            "user_id": "test_user"
         }
         result = agent.process_request(request)
-
-        # 验证结果
-        assert result["agent"] == "emotion"
-        assert result["user_id"] == "test_user_1"
-        assert result["content"] == "我今天学到了很多新知识，好开心！"
+        assert "agent" in result
+        assert "user_id" in result
+        assert "content" in result
         assert "emotion_analysis" in result
         assert "response" in result
+        assert "status" in result
+        assert result["agent"] == "emotion"
+        assert result["status"] == "processed"

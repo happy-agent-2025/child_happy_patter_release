@@ -1,10 +1,59 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card } from 'antd';
+import MessageList from '../components/MessageList';
+
+interface Message {
+  id: number;
+  content: string;
+  sender: 'user' | 'meta' | 'safety' | 'edu' | 'emotion' | 'memory';
+  timestamp: Date;
+  isAudio?: boolean;
+}
 
 const ChatPage: React.FC = () => {
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: 1,
+      content: '你好！我是Happy Partner，很高兴为你服务！',
+      sender: 'meta',
+      timestamp: new Date('2025-08-26T10:00:00'),
+    },
+    {
+      id: 2,
+      content: '我想学习数学',
+      sender: 'user',
+      timestamp: new Date('2025-08-26T10:01:00'),
+    },
+    {
+      id: 3,
+      content: '好的！让我为你连接到教育代理来帮助学习数学。',
+      sender: 'meta',
+      timestamp: new Date('2025-08-26T10:01:10'),
+    },
+    {
+      id: 4,
+      content: '欢迎学习数学！你想了解什么数学知识呢？比如加减法、乘法表还是几何图形？',
+      sender: 'edu',
+      timestamp: new Date('2025-08-26T10:01:20'),
+    },
+    {
+      id: 5,
+      content: '语音消息',
+      sender: 'user',
+      timestamp: new Date('2025-08-26T10:02:00'),
+      isAudio: true,
+    },
+    {
+      id: 6,
+      content: '我听到了你的语音消息！让我为你解释乘法表的知识。',
+      sender: 'edu',
+      timestamp: new Date('2025-08-26T10:02:30'),
+    },
+  ]);
+
   return (
     <div style={{ padding: '20px' }}>
-      <Card title="聊天界面" style={{ height: '500px' }}>
+      <Card title="儿童教育AI聊天" style={{ height: '600px' }}>
         <div style={{ 
           display: 'flex', 
           flexDirection: 'column', 
@@ -17,12 +66,10 @@ const ChatPage: React.FC = () => {
             borderRadius: '6px', 
             padding: '10px',
             marginBottom: '10px',
-            overflowY: 'auto'
+            overflowY: 'auto',
+            backgroundColor: '#fafafa'
           }}>
-            {/* 消息列表将在这里显示 */}
-            <div style={{ textAlign: 'center', color: '#999', padding: '20px' }}>
-              消息列表区域
-            </div>
+            <MessageList messages={messages} />
           </div>
           
           <div style={{ display: 'flex', gap: '10px' }}>

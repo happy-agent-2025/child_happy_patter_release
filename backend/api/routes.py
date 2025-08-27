@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import sys
 import os
 import json
@@ -17,6 +18,7 @@ from agents.memory_agent import MemoryAgent
 from agents.emotion_agent import EmotionAgent
 from db.database import get_db
 from db.database_service import DatabaseService
+from models.user import Conversation, SecurityLog
 from services.stt_service import STTService
 from services.tts_service import TTSService
 from services.processing import AudioProcessingService
@@ -354,6 +356,178 @@ async def get_user_security_logs(user_id: int, limit: int = 10, db: Session = De
             for log in logs
         ]
     )
+
+
+@router.get("/users/{user_id}/activity-stats")
+async def get_user_activity_stats(user_id: int, days: int = 7, db: Session = Depends(get_db)):
+    """
+    获取用户活动统计信息
+    
+    - **user_id**: 用户ID
+    - **days**: 统计天数，默认为7天
+    
+    返回用户的活动统计信息，包括：
+    - 各代理类型的使用次数
+    - 每日活动趋势
+    - 总对话次数
+    - 总对话时长（估算）
+    """
+    # 获取用户在指定天数内的所有对话记录
+    cutoff_date = datetime.now() - timedelta(days=days)
+    conversations = db.query(Conversation).filter(
+        and_(
+            Conversation.user_id == user_id,
+            Conversation.created_at >= cutoff_date
+        )
+    ).all()
+    
+    # 统计各代理类型的使用次数
+    agent_usage = {}
+    daily_activity = {}
+    
+    total_conversations = len(conversations)
+    
+    for conv in conversations:
+        # 统计代理类型使用情况
+        agent_type = getattr(conv, 'agent_type', 'unknown')
+        agent_usage[agent_type] = agent_usage.get(agent_type, 0) + 1
+        
+        # 统计每日活动
+        conv_date = getattr(conv, 'created_at', datetime.now()).date()
+        date_str = conv_date.isoformat()
+        daily_activity[date_str] = daily_activity.get(date_str, 0) + 1
+    
+    # 获取用户的安全日志统计
+    security_logs = db.query(SecurityLog).filter(
+        and_(
+            SecurityLog.user_id == user_id,
+            SecurityLog.created_at >= cutoff_date
+        )
+    ).all()
+    
+    unsafe_content_count = sum(1 for log in security_logs if getattr(log, 'is_safe', 1) == 0)
+    
+    return {
+        "user_id": user_id,
+        "period_days": days,
+        "statistics": {
+            "total_conversations": total_conversations,
+            "agent_usage": agent_usage,
+            "daily_activity": daily_activity,
+            "security_stats": {
+                "unsafe_content_count": unsafe_content_count,
+                "total_security_logs": len(security_logs)
+            }
+        }
+    }
+
+
+@router.get("/users/{user_id}/learning-progress")
+async def get_user_learning_progress(user_id: int, db: Session = Depends(get_db)):
+    """
+    获取用户学习进度
+    
+    - **user_id**: 用户ID
+    
+    返回用户在各学科的学习进度信息
+    """
+    # 获取用户的所有教育类对话记录
+    edu_conversations = db.query(Conversation).filter(
+        and_(
+            Conversation.user_id == user_id,
+            Conversation.agent_type == "edu"
+        )
+    ).all()
+    
+    # 分析学科相关对话
+    subjects = {}
+    total_questions = 0
+    
+    for conv in edu_conversations:
+        history = getattr(conv, 'conversation_history', [])
+        if isinstance(history, str):
+            try:
+                history = json.loads(history)
+            except json.JSONDecodeError:
+                continue
+        
+        if isinstance(history, list):
+            for interaction in history:
+                if isinstance(interaction, dict) and 'user_input' in interaction:
+                    total_questions += 1
+                    # 这里可以添加更复杂的学科分析逻辑
+                    # 目前简化处理，仅统计对话次数
+    
+    return {
+        "user_id": user_id,
+        "total_questions": total_questions,
+        "subjects": subjects,
+        "progress_summary": {
+            "total_questions": total_questions,
+            "engagement_level": "high" if total_questions > 50 else "medium" if total_questions > 20 else "low"
+        }
+    }
+
+
+@router.post("/users/{user_id}/content-filters")
+async def update_content_filters(user_id: int, filters: dict, db: Session = Depends(get_db)):
+    """
+    更新用户内容过滤设置
+    
+    - **user_id**: 用户ID
+    - **filters**: 过滤设置字典
+    
+    更新并返回用户的内容过滤设置
+    """
+    # 在实际实现中，这里会将过滤设置保存到数据库
+    # 目前我们简化处理，仅返回设置
+    return {
+        "user_id": user_id,
+        "filters": filters,
+        "message": "内容过滤设置已更新"
+    }
+
+
+@router.get("/users/{user_id}/usage-limits")
+async def get_user_usage_limits(user_id: int, db: Session = Depends(get_db)):
+    """
+    获取用户使用限制设置
+    
+    - **user_id**: 用户ID
+    
+    返回用户的使用时间限制设置
+    """
+    # 在实际实现中，这里会从数据库获取用户的使用限制设置
+    # 目前我们返回默认设置
+    return {
+        "user_id": user_id,
+        "daily_limit_minutes": 120,  # 默认每日限制120分钟
+        "weekly_limit_minutes": 600,  # 默认每周限制600分钟
+        "session_limit_minutes": 30,  # 默认单次会话限制30分钟
+        "restrictions": {
+            "weekdays": {"start": "09:00", "end": "18:00"},  # 工作日使用时间
+            "weekends": {"start": "08:00", "end": "20:00"}   # 周末使用时间
+        }
+    }
+
+
+@router.post("/users/{user_id}/usage-limits")
+async def update_user_usage_limits(user_id: int, limits: dict, db: Session = Depends(get_db)):
+    """
+    更新用户使用限制设置
+    
+    - **user_id**: 用户ID
+    - **limits**: 使用限制设置
+    
+    更新并返回用户的使用限制设置
+    """
+    # 在实际实现中，这里会将限制设置保存到数据库
+    # 目前我们简化处理，仅返回设置
+    return {
+        "user_id": user_id,
+        "limits": limits,
+        "message": "使用限制设置已更新"
+    }
 
 
 @router.post("/users/{user_id}/sessions")

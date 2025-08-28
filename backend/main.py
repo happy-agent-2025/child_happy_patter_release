@@ -11,6 +11,8 @@ from db import init_db
 success = init_db.init_db()
 if not success:
     print("数据库初始化失败")
+else:
+    print("数据库初始化成功")
 
 # 导入路由
 from api.routes import router
@@ -37,4 +39,7 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # 使用默认端口8001避免冲突
+    port = 8001
+    host = "127.0.0.1"  # 使用127.0.0.1替代0.0.0.0
+    uvicorn.run(app, host=host, port=port)

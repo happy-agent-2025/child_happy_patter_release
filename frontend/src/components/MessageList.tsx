@@ -1,10 +1,6 @@
-import React from 'react';
-import { List, Avatar, Typography, Space } from 'antd';
+import { Avatar, Typography } from 'antd';
 import { 
-  UserOutlined, 
-  SafetyOutlined, 
-  BookOutlined, 
-  HeartOutlined,
+  UserOutlined,
   RobotOutlined 
 } from '@ant-design/icons';
 
@@ -13,9 +9,10 @@ const { Text } = Typography;
 interface Message {
   id: number;
   content: string;
-  sender: 'user' | 'meta' | 'safety' | 'edu' | 'emotion' | 'memory';
+  sender: 'user' | 'assistant';
   timestamp: Date;
   isAudio?: boolean;
+  agentType?: 'meta' | 'safety' | 'edu' | 'emotion' | 'memory'; // 只在需要时显示代理类型
 }
 
 interface MessageListProps {
@@ -23,41 +20,19 @@ interface MessageListProps {
 }
 
 const MessageList: React.FC<MessageListProps> = ({ messages }) => {
-  const getAgentIcon = (sender: string) => {
-    switch (sender) {
-      case 'user':
-        return <UserOutlined style={{ color: '#1890ff' }} />;
-      case 'meta':
-        return <RobotOutlined style={{ color: '#722ed1' }} />;
-      case 'safety':
-        return <SafetyOutlined style={{ color: '#fa541c' }} />;
-      case 'edu':
-        return <BookOutlined style={{ color: '#52c41a' }} />;
-      case 'emotion':
-        return <HeartOutlined style={{ color: '#eb2f96' }} />;
-      case 'memory':
-        return <RobotOutlined style={{ color: '#faad14' }} />;
-      default:
-        return <RobotOutlined />;
-    }
-  };
-
-  const getAgentName = (sender: string) => {
-    switch (sender) {
-      case 'user':
-        return '用户';
-      case 'meta':
-        return '元代理';
-      case 'safety':
-        return '安全代理';
-      case 'edu':
-        return '教育代理';
-      case 'emotion':
-        return '情感代理';
-      case 'memory':
-        return '记忆代理';
-      default:
-        return '未知代理';
+  const getSenderInfo = (message: Message) => {
+    if (message.sender === 'user') {
+      return {
+        icon: <UserOutlined style={{ color: '#1890ff' }} />,
+        name: '你',
+        color: '#1890ff'
+      };
+    } else {
+      return {
+        icon: <RobotOutlined style={{ color: '#52c41a' }} />,
+        name: 'Happy Partner',
+        color: '#52c41a'
+      };
     }
   };
 
@@ -69,82 +44,70 @@ const MessageList: React.FC<MessageListProps> = ({ messages }) => {
   };
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto' }}>
-      <List
-        dataSource={messages}
-        renderItem={(message) => (
-          <List.Item
+    <div style={{ height: '100%', overflowY: 'auto', padding: '10px' }}>
+      {messages.map((message) => {
+        const senderInfo = getSenderInfo(message);
+        return (
+          <div
+            key={message.id}
             style={{
-              padding: '12px 16px',
-              border: 'none',
-              backgroundColor: message.sender === 'user' ? '#f0f8ff' : '#fff',
-              marginBottom: '8px',
-              borderRadius: '8px',
-              borderLeft: `4px solid ${
-                message.sender === 'user' ? '#1890ff' : 
-                message.sender === 'meta' ? '#722ed1' :
-                message.sender === 'safety' ? '#fa541c' :
-                message.sender === 'edu' ? '#52c41a' :
-                message.sender === 'emotion' ? '#eb2f96' : '#faad14'
-              }`
+              display: 'flex',
+              flexDirection: message.sender === 'user' ? 'row-reverse' : 'row',
+              marginBottom: '12px',
+              alignItems: 'flex-start'
             }}
           >
-            <List.Item.Meta
-              avatar={
-                <Avatar 
-                  size="small" 
-                  icon={getAgentIcon(message.sender)}
-                  style={{
-                    backgroundColor: message.sender === 'user' ? '#1890ff' : 
-                    message.sender === 'meta' ? '#722ed1' :
-                    message.sender === 'safety' ? '#fa541c' :
-                    message.sender === 'edu' ? '#52c41a' :
-                    message.sender === 'emotion' ? '#eb2f96' : '#faad14'
-                  }}
-                />
-              }
-              title={
-                <Space>
-                  <Text strong>{getAgentName(message.sender)}</Text>
-                  <Text type="secondary" style={{ fontSize: '12px' }}>
-                    {formatTime(message.timestamp)}
-                  </Text>
-                </Space>
-              }
-              description={
-                message.isAudio ? (
-                  <div style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '8px',
-                    padding: '8px',
-                    backgroundColor: '#f5f5f5',
-                    borderRadius: '6px'
-                  }}>
-                    <span>🎵</span>
-                    <Text>语音消息</Text>
-                    <button 
-                      style={{ 
-                        padding: '4px 8px', 
-                        fontSize: '12px',
-                        backgroundColor: '#1890ff',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      播放
-                    </button>
-                  </div>
-                ) : (
-                  <Text>{message.content}</Text>
-                )
-              }
+            <Avatar 
+              size="small" 
+              icon={senderInfo.icon}
+              style={{
+                backgroundColor: senderInfo.color,
+                margin: message.sender === 'user' ? '0 0 0 8px' : '0 8px 0 0'
+              }}
             />
-          </List.Item>
-        )}
-      />
+            
+            <div
+              style={{
+                maxWidth: '70%',
+                backgroundColor: message.sender === 'user' ? '#1890ff' : '#f0f0f0',
+                color: message.sender === 'user' ? 'white' : '#333',
+                padding: '8px 12px',
+                borderRadius: '12px',
+                borderTopLeftRadius: message.sender === 'user' ? '12px' : '4px',
+                borderTopRightRadius: message.sender === 'user' ? '4px' : '12px'
+              }}
+            >
+              {message.isAudio ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>🎵</span>
+                  <Text style={{ color: message.sender === 'user' ? 'white' : '#333', fontSize: '12px' }}>
+                    语音消息
+                  </Text>
+                </div>
+              ) : (
+                <Text style={{ color: message.sender === 'user' ? 'white' : '#333' }}>
+                  {message.content}
+                </Text>
+              )}
+              
+              <div style={{ 
+                textAlign: message.sender === 'user' ? 'right' : 'left',
+                marginTop: '4px'
+              }}>
+                <Text 
+                  type="secondary" 
+                  style={{ 
+                    fontSize: '10px', 
+                    color: message.sender === 'user' ? 'rgba(255,255,255,0.7)' : '#999' 
+                  }}
+                >
+                  {formatTime(message.timestamp)}
+                </Text>
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 };

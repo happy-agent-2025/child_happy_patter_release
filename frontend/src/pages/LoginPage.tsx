@@ -1,10 +1,34 @@
-import React from 'react';
-import { Card, Form, Input, Button } from 'antd';
+import React, { useState } from 'react';
+import { Card, Form, Input, Button, message } from 'antd';
+import { useNavigate } from 'react-router-dom';
+import { AuthApiService } from '../services/authApi';
+import { LoginRequest } from '../types/api';
 
 const LoginPage: React.FC = () => {
-  const onFinish = (values: any) => {
-    console.log('登录信息:', values);
-    // 这里后续会集成登录API
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const onFinish = async (values: LoginRequest) => {
+    setLoading(true);
+    try {
+      console.log('开始登录，用户名:', values.username);
+      
+      // 调用登录API
+      const response = await AuthApiService.login(values);
+      
+      if (response.access_token) {
+        message.success('登录成功！正在跳转...');
+        // 登录成功后跳转到聊天页面
+        setTimeout(() => {
+          navigate('/chat');
+        }, 1000);
+      }
+    } catch (error: any) {
+      console.error('登录失败:', error);
+      message.error(error.message || '登录失败，请重试');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -39,8 +63,13 @@ const LoginPage: React.FC = () => {
           </Form.Item>
 
           <Form.Item>
-            <Button type="primary" htmlType="submit" style={{ width: '100%' }}>
-              登录
+            <Button 
+              type="primary" 
+              htmlType="submit" 
+              loading={loading}
+              style={{ width: '100%' }}
+            >
+              {loading ? '登录中...' : '登录'}
             </Button>
           </Form.Item>
         </Form>

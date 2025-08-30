@@ -37,8 +37,7 @@ const DebugPage: React.FC = () => {
       addLog(`错误详情: ${JSON.stringify({
         status: error.response?.status,
         statusText: error.response?.statusText,
-        data: error.response?.data,
-        headers: error.response?.headers
+        data: error.response?.data
       }, null, 2)}`);
       
       message.error('连接测试失败');

@@ -16,22 +16,10 @@ export class ChatApiService {
    * 发送聊天消息
    */
   static async sendMessage(chatData: ChatRequest): Promise<any> {
-    console.log('[Chat] 发送消息:', chatData);
     try {
-      // 确保内容编码正确
-      const encodedData = {
-        ...chatData,
-        content: chatData.content
-      };
-      
       const response = await apiRequest.post(
         API_ENDPOINTS.CHAT.SEND, 
-        encodedData,
-        {
-          headers: {
-            'Content-Type': 'application/json; charset=utf-8'
-          }
-        }
+        chatData
       );
       
       console.log('[Chat] 消息发送成功');
@@ -110,24 +98,13 @@ export class ChatApiService {
   /**
    * 智能聊天（通用聊天接口，会自动路由到合适的代理）
    */
-static async intelligentChat(message: string, userId?: number, sessionId?: number): Promise<any> {
-  console.log('[ChatAPI] 发送智能聊天消息:', { message, userId, sessionId });
-  
-  const chatData: ChatRequest = {
-    content: message,
-    user_id: userId,
-    session_id: sessionId
-  };
+  static async intelligentChat(message: string, userId?: number, sessionId?: number): Promise<any> {
+    const chatData: ChatRequest = {
+      content: message,
+      user_id: userId,
+      session_id: sessionId
+    };
 
-  console.log('[ChatAPI] 请求数据:', chatData);
-  
-  try {
-    const response = await this.sendMessage(chatData);
-    console.log('[ChatAPI] 收到响应:', response);
-    return response;
-  } catch (error) {
-    console.error('[ChatAPI] 发送消息时出错:', error);
-    throw error;
+    return this.sendMessage(chatData);
   }
-}
 }

@@ -5,20 +5,14 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 3007,
+    port: 3007, // 固定端口为3007
     host: 'localhost',
-    strictPort: true, // 严格使用指定端口
+    strictPort: false, // 如果端口被占用，尝试下一个可用端口
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8001',
         changeOrigin: true,
         secure: false,
-        configure: (proxy, options) => {
-          proxy.on('proxyReq', (proxyReq, req, res) => {
-            // 添加UTF-8编码支持
-            proxyReq.setHeader('Accept-Charset', 'utf-8');
-          });
-        }
       }
     }
   }

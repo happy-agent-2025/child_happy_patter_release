@@ -2,22 +2,11 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosR
 
 // 创建axios实例
 const api: AxiosInstance = axios.create({
-  baseURL: '/api', // 使用相对路径，通过Vite代理转发到后端
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8001/api',
   timeout: 100000,
   headers: {
-    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Type': 'application/json',
   },
-  // 添加响应数据类型转换
-  transformResponse: [(data) => {
-    if (typeof data === 'string') {
-      try {
-        return JSON.parse(data);
-      } catch (e) {
-        return data;
-      }
-    }
-    return data;
-  }]
 });
 
 // 请求拦截器
@@ -88,34 +77,16 @@ export const apiRequest = {
     api.get(url, config).then(response => response.data),
     
   post: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => 
-    api.post(url, data, { 
-      ...config,
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        ...config?.headers
-      }
-    }).then(response => response.data),
+    api.post(url, data, config).then(response => response.data),
     
   put: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => 
-    api.put(url, data, { 
-      ...config,
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        ...config?.headers
-      }
-    }).then(response => response.data),
+    api.put(url, data, config).then(response => response.data),
     
   delete: <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> => 
     api.delete(url, config).then(response => response.data),
     
   patch: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => 
-    api.patch(url, data, { 
-      ...config,
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        ...config?.headers
-      }
-    }).then(response => response.data),
+    api.patch(url, data, config).then(response => response.data),
 };
 
 // API端点常量

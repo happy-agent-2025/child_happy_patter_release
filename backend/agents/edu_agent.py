@@ -120,7 +120,7 @@ class EduAgent:
         else:
             return "通用"
     
-    def answer_question(self, question: str, user_info: Dict[str, Any] = None) -> str:
+    def answer_question(self, question: str, user_info: Dict[str, Any]) -> str:
         """
         使用OpenAI智能回答教育相关问题
         """

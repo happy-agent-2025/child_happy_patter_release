@@ -130,28 +130,7 @@ const ChatPage: React.FC = () => {
           type: mediaRecorder.mimeType || 'audio/webm' 
         });
         
-        // 调试：保存录音文件到本地（开发环境自动下载，生产环境只记录信息）
-        if (import.meta.env.DEV) {
-          try {
-            const audioUrl = URL.createObjectURL(audioBlob);
-            const a = document.createElement('a');
-            a.href = audioUrl;
-            const fileExtension = selectedType.includes('webm') ? 'webm' : 
-                               selectedType.includes('mp4') ? 'mp4' : 
-                               selectedType.includes('ogg') ? 'ogg' : 'wav';
-            a.download = `recording_${Date.now()}_${recordingTime.toFixed(1)}s.${fileExtension}`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(audioUrl);
-            console.log('录音文件已保存，时长:', recordingTime.toFixed(1) + 's', '大小:', (audioBlob.size / 1024).toFixed(1) + 'KB', '格式:', mediaRecorder?.mimeType || 'unknown', '比特率:', Math.round(audioBlob.size * 8 / recordingTime / 1000) + 'kbps');
-          } catch (saveError) {
-            console.warn('无法保存录音文件:', saveError);
-          }
-        } else {
-          // 生产环境只记录信息
-          console.log('录音完成，时长:', recordingTime.toFixed(1) + 's', '大小:', (audioBlob.size / 1024).toFixed(1) + 'KB', '格式:', mediaRecorder?.mimeType || 'unknown', '比特率:', Math.round(audioBlob.size * 8 / recordingTime / 1000) + 'kbps');
-        }
+        console.log('录音完成，时长:', recordingTime.toFixed(1) + 's', '大小:', (audioBlob.size / 1024).toFixed(1) + 'KB', '格式:', mediaRecorder?.mimeType || 'unknown', '比特率:', Math.round(audioBlob.size * 8 / recordingTime / 1000) + 'kbps');
         
         // 检查录音时长是否超过1秒
         if (recordingTime >= 1) {
@@ -283,6 +262,8 @@ const ChatPage: React.FC = () => {
             speed: 1.0,
             volume: 1.0
           });
+
+          console.log('文本转语音成功，播放中...', ttsResponse);
           
           if (ttsResponse.audio_data) {
             await AudioApiService.playAudio(ttsResponse.audio_data, ttsResponse.format);

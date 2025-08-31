@@ -6,6 +6,11 @@ from datetime import datetime, timedelta
 import sys
 import os
 import json
+import logging
+
+# 配置日志
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
 
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -55,7 +60,7 @@ emotion_agent = EmotionAgent()
 
 # 初始化音频服务
 stt_service = STTService()
-tts_service = TTSService()
+tts_service = TTSService("edge_tts")
 audio_processing_service = AudioProcessingService()
 voice_verification_service = VoiceVerificationService()
 audio_codec_service = AudioCodecService()
@@ -700,15 +705,24 @@ async def synthesize_audio(request: AudioSynthesizeRequest):
         audio_buffer = tts_service.synthesize_speech(request.text)
         
         # 估算音频时长（假设采样率16kHz）
-        audio_data = audio_buffer.getvalue()
-        audio_duration = len(audio_data) / (16000 * 2) if audio_data else 0
+        if audio_buffer:
+            audio_data = audio_buffer.getvalue()
+            audio_duration = len(audio_data) / (16000 * 2) if audio_data else 0
         
-        return AudioSynthesizeResponse(
-            audio_data=audio_data.hex(),  # 转换为十六进制字符串表示
-            duration=audio_duration,
-            format="wav",
-            sample_rate=16000
-        )
+            return AudioSynthesizeResponse(
+                audio_data=audio_data.hex(),  # 转换为十六进制字符串表示
+                duration=audio_duration,
+                format="wav",
+                sample_rate=16000
+            )
+        else:
+            logger.error("音频处理失败")
+            return AudioSynthesizeResponse(
+                audio_data="",
+                duration=0,
+                format="wav",
+                sample_rate=16000
+            )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"语音合成失败: {str(e)}")
 

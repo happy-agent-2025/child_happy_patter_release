@@ -245,6 +245,8 @@ class DatabaseService:
             "timestamp": datetime.now(timezone.utc).isoformat()
         }]
         
+        logger.info(f"创建新的对话历史：{conversation_history}")
+        
         db_conversation = Conversation(
             user_id=user_id,
             session_id=session_id,

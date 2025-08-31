@@ -3,8 +3,8 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import zhCN from 'antd/locale/zh_CN'
 import Layout from './components/Layout'
 import ChatPage from './pages/ChatPage'
-import LoginPage from './pages/LoginPage'
-import DebugPage from './pages/DebugPage'
+// import LoginPage from './pages/LoginPage'
+// import DebugPage from './pages/DebugPage'
 import './App.css'
 
 function App() {
@@ -12,13 +12,13 @@ function App() {
     <ConfigProvider locale={zhCN}>
       <Router>
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
+          {/* <Route path="/login" element={<LoginPage />} /> */}
           <Route path="/*" element={
             <Layout>
               <Routes>
                 <Route path="/" element={<ChatPage />} />
-                <Route path="/chat" element={<ChatPage />} />
-                <Route path="/debug" element={<DebugPage />} />
+                {/* <Route path="/chat" element={<ChatPage />} /> */}
+                {/* <Route path="/debug" element={<DebugPage />} /> */}
               </Routes>
             </Layout>
           } />

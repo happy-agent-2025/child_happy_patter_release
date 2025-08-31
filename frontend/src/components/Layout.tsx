@@ -1,10 +1,10 @@
 import React from 'react';
 import { Layout as AntLayout, Menu } from 'antd';
-import { 
-  MessageOutlined, 
-  UserOutlined,
-  AudioOutlined 
-} from '@ant-design/icons';
+// import { 
+//   MessageOutlined, 
+//   UserOutlined,
+//   AudioOutlined 
+// } from '@ant-design/icons';
 
 const { Header, Sider, Content } = AntLayout;
 
@@ -17,7 +17,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     <AntLayout style={{ minHeight: '100vh' }}>
       <Sider 
         theme="light" 
-        width={200}
+        width={10}
         style={{
           boxShadow: '2px 0 6px rgba(0,21,41,0.1)',
         }}
@@ -28,10 +28,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           fontWeight: 'bold',
           borderBottom: '1px solid #f0f0f0'
         }}>
-          Happy Partner
+          {/* Happy Partner */}
         </div>
         
-        <Menu
+        {/* <Menu
           mode="inline"
           defaultSelectedKeys={['chat']}
           items={[
@@ -51,7 +51,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               label: '个人中心',
             },
           ]}
-        />
+        /> */}
       </Sider>
       
       <AntLayout>

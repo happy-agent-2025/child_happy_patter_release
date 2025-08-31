@@ -1,25 +1,22 @@
 import speech_recognition as sr
 from typing import BinaryIO, Optional, Any, Union
 import numpy as np
-from services.processing import AudioProcessingService
-from services.codecs import AudioCodecService
+from io import BytesIO
+import wave
+import tempfile
 import os
 from datetime import datetime
 import struct
-import wave
-from pathlib import Path
 
 # 获取speech_recognition中的异常类
 try:
     UnknownValueError = sr.UnknownValueError
 except AttributeError:
-    # 如果找不到UnknownValueError，使用通用异常
     UnknownValueError = Exception
 
 try:
     RequestError = sr.RequestError
 except AttributeError:
-    # 如果找不到RequestError，使用通用异常
     RequestError = Exception
 
 # 类型注释
@@ -29,286 +26,323 @@ RecognizerType = Any
 
 class STTService:
     """
-    语音转文本服务
+    语音转文本服务（完全内存操作）
     """
     
     def __init__(self):
         self.recognizer: RecognizerType = sr.Recognizer()
-        self.audio_processor = AudioProcessingService()
-        self.audio_codec = AudioCodecService()
         # 设置识别器参数
         self.recognizer.energy_threshold = 400
         self.recognizer.dynamic_energy_threshold = True
         self.recognizer.pause_threshold = 0.8
     
-    def _handle_audio_input(self, audio_input: Union[BinaryIO, bytes], filename: str):
+    def _convert_to_wav_in_memory(self, audio_data: bytes) -> BytesIO:
         """
-        处理不同类型的音频输入数据并保存到文件
+        将音频数据转换为WAV格式（内存操作）
         
         Args:
-            audio_input: 音频文件对象或字节数据
-            filename: 保存的文件名
+            audio_data: 原始音频数据
+            
+        Returns:
+            WAV格式的BytesIO对象
         """
-        
         try:
-            if isinstance(audio_input, bytes):
-                # 处理字节数据
-                with open(filename, "wb") as f:
-                    f.write(audio_input)
-            
-            elif isinstance(audio_input, bytearray):
-                # 处理bytearray数据
-                with open(filename, "wb") as f:
-                    f.write(bytes(audio_input))
-            
-            elif isinstance(audio_input, memoryview):
-                # 处理memoryview数据
-                with open(filename, "wb") as f:
-                    f.write(audio_input.tobytes())
-            
-            elif str(type(audio_input)).find('BytesIO') != -1:
-                # 处理BytesIO对象，先检查是否有seek和read方法
-                seek_method = getattr(audio_input, 'seek', None)
-                if seek_method and callable(seek_method):
-                    audio_input.seek(0)
+            # 首先尝试直接读取音频数据
+            try:
+                # 使用pydub进行格式转换（如果可用）
+                try:
+                    from pydub import AudioSegment
+                    
+                    # 从字节数据创建音频段
+                    audio = AudioSegment.from_file(BytesIO(audio_data))
+                    # 转换为WAV格式：16kHz, 16bit, 单声道
+                    audio = audio.set_frame_rate(16000).set_sample_width(2).set_channels(1)
+                    
+                    # 导出到内存
+                    wav_buffer = BytesIO()
+                    audio.export(wav_buffer, format="wav")
+                    wav_buffer.seek(0)
+                    
+                    return wav_buffer
+                    
+                except ImportError:
+                    # pydub不可用，使用FFmpeg
+                    pass
                 
-                read_method = getattr(audio_input, 'read', None)
-                if read_method and callable(read_method):
-                    with open(filename, "wb") as f:
-                        f.write(audio_input.read())
-                elif str(type(audio_input)).find('BytesIO') != -1:
-                    getvalue_method = getattr(audio_input, 'getvalue', None)
-                    if getvalue_method and callable(getvalue_method):
-                        with open(filename, "wb") as f:
-                            value = getvalue_method()
-                            if isinstance(value, (bytes, bytearray)):
-                                f.write(value)
-                            else:
-                                f.write(str(value).encode())
-                    else:
-                        # 最后尝试直接写入
-                        with open(filename, "wb") as f:
-                            f.write(str(audio_input).encode())
-                else:
-                    # 最后尝试直接写入
-                    with open(filename, "wb") as f:
-                        f.write(str(audio_input).encode())
+            except:
+                # pydub处理失败，使用FFmpeg
+                pass
             
-            elif hasattr(audio_input, 'read') and callable(getattr(audio_input, 'read', None)):
-                # 处理文件对象
-                seek_method = getattr(audio_input, 'seek', None)
-                if seek_method and callable(seek_method):
-                    audio_input.seek(0)
+            # 使用FFmpeg进行内存转换
+            try:
+                import ffmpeg
                 
-                # 分块读取，避免内存问题
-                chunk_size = 1024 * 1024  # 1MB per chunk
-                with open(filename, "wb") as f:
-                    while True:
-                        chunk = audio_input.read(chunk_size)
-                        if not chunk:
-                            break
-                        # 确保chunk是bytes类型
-                        if isinstance(chunk, (bytes, bytearray)):
-                            f.write(bytes(chunk))
-                        elif isinstance(chunk, memoryview):
-                            f.write(chunk.tobytes())
-                        else:
-                            f.write(str(chunk).encode())
-            
-            else:
-                # 尝试使用通用方法处理
-                read_method = getattr(audio_input, 'read', None)
-                if read_method and callable(read_method):
-                    # 分块读取
-                    chunk_size = 1024 * 1024
-                    with open(filename, "wb") as f:
-                        while True:
-                            chunk = read_method(chunk_size)
-                            if not chunk:
-                                break
-                            # 确保chunk是bytes类型
-                            if isinstance(chunk, (bytes, bytearray)):
-                                f.write(bytes(chunk))
-                            elif isinstance(chunk, memoryview):
-                                f.write(chunk.tobytes())
-                            else:
-                                f.write(str(chunk).encode())
+                # 使用FFmpeg管道进行内存转换
+                process = (
+                    ffmpeg
+                    .input('pipe:0')
+                    .output(
+                        'pipe:1',
+                        format='wav',
+                        acodec='pcm_s16le',
+                        ar=16000,
+                        ac=1
+                    )
+                    .overwrite_output()
+                    .run_async(pipe_stdin=True, pipe_stdout=True, pipe_stderr=True, quiet=True)
+                )
+                
+                # 写入输入数据
+                process.stdin.write(audio_data)
+                process.stdin.close()
+                
+                # 读取输出数据
+                wav_data = process.stdout.read()
+                process.wait()
+                
+                if process.returncode == 0:
+                    return BytesIO(wav_data)
                 else:
-                    # 直接写入数据，确保是bytes类型
-                    with open(filename, "wb") as f:
-                        if isinstance(audio_input, (bytes, bytearray)):
-                            f.write(bytes(audio_input))
-                        elif isinstance(audio_input, memoryview):
-                            f.write(audio_input.tobytes())
-                        else:
-                            f.write(str(audio_input).encode())
-        
+                    raise Exception("FFmpeg转换失败")
+                    
+            except ImportError:
+                # FFmpeg不可用，尝试其他方法
+                pass
+            
+            # 最后尝试：如果数据已经是WAV格式，直接返回
+            try:
+                # 检查是否是WAV文件
+                with wave.open(BytesIO(audio_data)) as wav_file:
+                    # 如果是WAV，检查格式是否符合要求
+                    if (wav_file.getframerate() == 16000 and 
+                        wav_file.getnchannels() == 1 and 
+                        wav_file.getsampwidth() == 2):
+                        return BytesIO(audio_data)
+            except:
+                pass
+            
+            # 如果所有方法都失败，抛出异常
+            raise Exception("无法转换音频格式")
+            
         except Exception as e:
-            print(f"处理音频输入时发生错误: {str(e)}")
-            # 清理可能损坏的文件
-            if os.path.exists(filename):
-                os.remove(filename)
+            print(f"音频转换失败: {e}")
             raise
     
-    def _convert_audio_format(self, input_filename: str, output_filename: str) -> bool:
+    def _bytes_to_audio_data(self, audio_buffer: BytesIO) -> sr.AudioData:
         """
-        尝试将音频文件转换为WAV格式
+        将字节数据转换为speech_recognition的AudioData对象
         
         Args:
-            input_filename: 输入文件名
-            output_filename: 输出文件名
+            audio_buffer: 包含WAV音频数据的BytesIO对象
             
         Returns:
-            转换是否成功
+            speech_recognition的AudioData对象
         """
         try:
-            # 确保输出目录存在
-            output_dir = os.path.dirname(output_filename)
-            if output_dir and not os.path.exists(output_dir):
-                os.makedirs(output_dir)
+            # 读取WAV文件信息
+            with wave.open(audio_buffer) as wav_file:
+                frame_rate = wav_file.getframerate()
+                frames = wav_file.readframes(wav_file.getnframes())
+                sample_width = wav_file.getsampwidth()
             
-            import ffmpeg
-            # 正确的调用顺序
-            (
-                ffmpeg
-                .input(input_filename)
-                .output(
-                    output_filename, 
-                    acodec='pcm_s16le', 
-                    ar=16000, 
-                    ac=1
-                )
-                .overwrite_output()  # 这个应该在output之后
-                .run(quiet=True)
-            )
-            print(f"转换音频成功: {input_filename} -> {output_filename}")
+            # 创建AudioData对象
+            audio_data = sr.AudioData(frames, frame_rate, sample_width)
+            return audio_data
             
-            # 验证文件是否真的创建了
-            if os.path.exists(output_filename):
-                file_size = os.path.getsize(output_filename)
-                print(f"文件已保存: {output_filename} (大小: {file_size} 字节)")
-                return True
-            else:
-                print("错误: 文件未创建")
-                return False
-                
-        except ffmpeg.Error as e: # type: ignore
-            print(f"FFmpeg错误: {e.stderr.decode() if hasattr(e, 'stderr') else str(e)}")
-            return False
         except Exception as e:
-            print(f"其他错误: {e}")
-            return False
+            print(f"创建AudioData失败: {e}")
+            raise
     
-    # 谷歌在线音频检测，不适用这个
-    def _debug_speech_recognition_internals(self, converted_filename: str) -> str:
-        """深入调试speech_recognition库的内部问题"""
-        try:
-            absolute_path = os.path.abspath(converted_filename).replace('\\', '/')
-            print(f"绝对路径: {absolute_path}")
-            
-            # 手动检查speech_recognition的AudioFile初始化过程
-            recognizer = sr.Recognizer()
-            
-            # 尝试直接查看AudioFile的初始化代码
-            try:
-                # 手动模拟AudioFile的初始化过程
-                with open(absolute_path, 'rb') as audio_file:
-                    # 检查文件是否可读
-                    data = audio_file.read(100)
-                    print(f"文件头数据: {data[:20]}")
-                    
-                    # 重新打开文件用于AudioFile
-                    audio_file.seek(0)
-                    
-                    # 这里是最可能出错的地方
-                    audio_source = sr.AudioFile(audio_file)
-                    print("AudioFile对象创建成功")
-                    
-                    with audio_source as source:
-                        print("音频源上下文管理器进入成功")
-                        audio = recognizer.record(source)
-                        print("音频录制成功")
-                        
-                        try:
-                            text = recognizer.recognize_google(audio, language='zh-CN') # type: ignore
-                            print(f"识别成功: {text}")
-                            return text
-                        except sr.UnknownValueError:
-                            print("无法识别内容")
-                            return "无法识别"
-                            
-            except Exception as e:
-                print(f"AudioFile初始化详细错误: {e}")
-                import traceback
-                traceback.print_exc()
-                return "无法识别内容"
-                
-        except Exception as e:
-            print(f"总体错误: {e}")
-            return "无法识别内容"
+    def _recognize_from_memory(self, audio_data: sr.AudioData) -> str:
+        """
+        从内存中的音频数据进行识别
         
-    def transcribe_audio(self, audio_file: Optional[Union[BinaryIO, bytes]] = None, 
+        Args:
+            audio_data: speech_recognition的AudioData对象
+            
+        Returns:
+            识别出的文本
+        """
+        try:
+            # 使用Google语音识别
+            text = self.recognizer.recognize_google(audio_data, language='zh-CN')
+            return text
+            
+        except UnknownValueError:
+            return "无法识别音频内容"
+        except RequestError as e:
+            print(f"语音识别服务错误: {e}")
+            return "语音识别服务不可用"
+        except Exception as e:
+            print(f"语音识别失败: {e}")
+            return "语音识别失败"
+    
+    def transcribe_audio(self, audio_input: Union[BinaryIO, bytes, bytearray],
                          preprocess: bool = True) -> str:
         """
-        将音频转换为文本
+        将音频转换为文本（完全内存操作）
         
         Args:
-            audio_file: 音频文件对象或字节数据
+            audio_input: 音频文件对象、字节数据或bytearray
             
         Returns:
             识别出的文本
         """
-        # 创建音频文件目录（如果不存在）
-        audio_dir = "audio_files"
-        if not os.path.exists(audio_dir):
-            os.makedirs(audio_dir)
-        
-        # 生成基于时间戳的文件名
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # 直接使用.wav扩展名，确保speech_recognition能正确识别
-        audio_filename = os.path.join(audio_dir, f"audio_{timestamp}")
-        
-        # 将audio_file写入指定文件
-        if audio_file is not None:
-            self._handle_audio_input(audio_file, audio_filename)
-            print(f"音频文件已保存到: {audio_filename}")
+        try:
+            # 1. 统一转换为字节数据
+            if isinstance(audio_input, (BytesIO, BinaryIO)):
+                audio_input.seek(0)
+                audio_data = audio_input.read()
+            elif isinstance(audio_input, (bytes, bytearray)):
+                audio_data = bytes(audio_input)
+            else:
+                raise ValueError("不支持的音频输入类型")
             
-        print("检测到WebM/Opus格式音频，尝试转换为WAV")
-        converted_filename = os.path.join(audio_dir, f"converted_{timestamp}.wav")
-        if self._convert_audio_format(audio_filename, converted_filename):
-            print("WebM/Opus转换为WAV成功")
+            if not audio_data:
+                return "音频数据为空"
             
-            absolute_path = os.path.abspath(converted_filename).replace('\\', '/')
-            print(f"绝对路径: {absolute_path}")
-            print(f"文件存在: {os.path.exists(absolute_path)}")
+            print(f"接收到音频数据: {len(audio_data)} 字节")
             
-            text = self._debug_speech_recognition_internals(converted_filename)
+            # 2. 转换为标准WAV格式（内存中）
+            wav_buffer = self._convert_to_wav_in_memory(audio_data)
+            print(f"转换为WAV格式成功: {wav_buffer.getbuffer().nbytes} 字节")
+            
+            # 3. 创建AudioData对象
+            audio_data_obj = self._bytes_to_audio_data(wav_buffer)
+            
+            # 4. 进行语音识别
+            text = self._recognize_from_memory(audio_data_obj)
             
             return text
-        
-        return "无法处理识别音频"
-        
-    def transcribe_with_preprocessing(self, audio_file: Union[BinaryIO, bytes]) -> str:
+            
+        except Exception as e:
+            print(f"音频转文本失败: {e}")
+            return f"处理失败: {str(e)}"
+    
+    def transcribe_with_fallback(self, audio_input: Union[BinaryIO, bytes, bytearray],
+                         preprocess: bool = True) -> str:
         """
-        带预处理的音频转文本
+        带降级处理的音频转文本（如果内存操作失败，使用文件回退）
         
         Args:
-            audio_file: 音频文件对象或字节数据
+            audio_input: 音频文件对象、字节数据或bytearray
             
         Returns:
             识别出的文本
         """
-        # 直接调用transcribe_audio方法并启用预处理
-        return self.transcribe_audio(audio_file, preprocess=True)
+        try:
+            # 首先尝试内存操作
+            return self.transcribe_audio(audio_input)
+            
+        except Exception as e:
+            print(f"内存操作失败，尝试文件回退: {e}")
+            
+            # 使用文件回退方案
+            temp_filename = None
+            try:
+                # 创建临时文件
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
+                    temp_filename = temp_file.name
+                
+                # 将数据写入临时文件
+                if isinstance(audio_input, (BytesIO, BinaryIO)):
+                    audio_input.seek(0)
+                    with open(temp_filename, 'wb') as f:
+                        f.write(audio_input.read())
+                elif isinstance(audio_input, (bytes, bytearray)):
+                    with open(temp_filename, 'wb') as f:
+                        f.write(audio_input)
+                
+                # 使用文件进行识别
+                with sr.AudioFile(temp_filename) as source:
+                    audio = self.recognizer.record(source)
+                    text = self.recognizer.recognize_google(audio, language='zh-CN')
+                
+                return text
+                
+            except Exception as fallback_error:
+                print(f"文件回退也失败: {fallback_error}")
+                return "无法处理音频"
+            finally:
+                # 清理临时文件
+                if temp_filename is not None and os.path.exists(temp_filename):
+                    os.remove(temp_filename)
     
-    def get_audio_info(self, audio_file: Union[BinaryIO, bytes]) -> dict:
+    def get_audio_info(self, audio_input: Union[BinaryIO, bytes, bytearray]) -> dict:
         """
-        获取音频文件信息
+        获取音频文件信息（内存操作）
         
         Args:
-            audio_file: 音频文件对象或字节数据
+            audio_input: 音频文件对象、字节数据或bytearray
             
         Returns:
             音频信息字典
         """
-        return {"info": f"暂未实现"}
+        try:
+            # 统一转换为字节数据
+            if isinstance(audio_input, (BytesIO, BinaryIO)):
+                audio_input.seek(0)
+                audio_data = audio_input.read()
+            elif isinstance(audio_input, (bytes, bytearray)):
+                audio_data = bytes(audio_input)
+            else:
+                return {"error": "不支持的音频输入类型"}
+            
+            info = {
+                "size_bytes": len(audio_data),
+                "format": "unknown"
+            }
+            
+            # 尝试检测格式
+            try:
+                import magic
+                file_type = magic.from_buffer(audio_data[:1024])
+                info["format"] = file_type
+            except ImportError:
+                info["format"] = "需要安装python-magic来检测格式"
+            
+            # 如果是WAV格式，获取详细信息
+            try:
+                with wave.open(BytesIO(audio_data)) as wav_file:
+                    info.update({
+                        "sample_rate": wav_file.getframerate(),
+                        "channels": wav_file.getnchannels(),
+                        "sample_width": wav_file.getsampwidth(),
+                        "frames": wav_file.getnframes(),
+                        "duration_seconds": wav_file.getnframes() / wav_file.getframerate() if wav_file.getframerate() > 0 else 0
+                    })
+            except:
+                pass
+            
+            return info
+            
+        except Exception as e:
+            return {"error": f"获取音频信息失败: {str(e)}"}
+
+
+# 使用示例
+def example_usage():
+    """使用示例"""
+    stt_service = STTService()
+    
+    # 示例1: 从文件读取并转换
+    with open("D:\\rag\\happy_partter\\happy_partner\\backend\\audio_files\\converted_20250831_164202.wav", "rb") as f:
+        audio_data = f.read()
+        text = stt_service.transcribe_audio(audio_data)
+        print(f"识别结果: {text}")
+    
+    # 示例2: 使用BytesIO
+    with open("D:\\rag\\happy_partter\\happy_partner\\backend\\audio_files\\converted_20250831_164202.wav", "rb") as f:
+        audio_buffer = BytesIO(f.read())
+        text = stt_service.transcribe_audio(audio_buffer)
+        print(f"识别结果: {text}")
+    
+    # 示例3: 获取音频信息
+    with open("D:\\rag\\happy_partter\\happy_partner\\backend\\audio_files\\converted_20250831_164202.wav", "rb") as f:
+        audio_data = f.read()
+        info = stt_service.get_audio_info(audio_data)
+        print(f"音频信息: {info}")
+
+
+if __name__ == "__main__":
+    example_usage()

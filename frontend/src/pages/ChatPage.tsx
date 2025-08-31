@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Card, Typography, message, Button } from 'antd';
 import { 
   AudioOutlined, 
@@ -57,6 +57,16 @@ const ChatPage: React.FC = () => {
       agentType: 'edu',
     },
   ]);
+
+  // 添加自动滚动效果
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
   
   const [inputValue, setInputValue] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
@@ -371,98 +381,175 @@ const ChatPage: React.FC = () => {
             <Text type="secondary" style={{ fontSize: '12px' }}>
               当前服务: {getCurrentAgent()}
             </Text>
+            {isRecording && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                marginLeft: 'auto',
+                color: '#ff4d4f',
+                fontSize: '12px'
+              }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: '#ff4d4f',
+                  marginRight: '4px',
+                  animation: 'pulse 1s infinite'
+                }} />
+                录音中...
+              </div>
+            )}
           </div>
         } 
-        style={{ height: '600px' }}
+        style={{ 
+          height: '600px',
+          display: 'flex',
+          flexDirection: 'column' // 添加flex布局
+        }}
+        bodyStyle={{ 
+          padding: '16px',
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden' // 防止外部溢出
+        }}
       >
+        {/* 消息列表容器 - 修复滑动条 */}
         <div style={{ 
-          display: 'flex', 
-          flexDirection: 'column', 
-          height: '100%',
-          justifyContent: 'space-between'
+          flex: 1,
+          border: '1px solid #d9d9d9',
+          borderRadius: '6px',
+          padding: '12px',
+          marginBottom: '12px',
+          backgroundColor: '#fafafa',
+          overflowY: 'auto', // 启用垂直滚动
+          overflowX: 'hidden', // 隐藏水平滚动
+          minHeight: 0, // 关键：允许Flex项目收缩
+          display: 'flex',
+          flexDirection: 'column'
         }}>
+          {/* 消息内容区域 */}
           <div style={{ 
-            flex: 1, 
-            border: '1px solid #d9d9d9', 
-            borderRadius: '6px', 
-            padding: '10px',
-            marginBottom: '10px',
-            overflowY: 'auto',
-            backgroundColor: '#fafafa'
+            flex: 1,
+            minHeight: 0, // 允许内容区域收缩
+            position: 'relative'
           }}>
             <MessageList messages={messages} />
+            <div ref={messagesEndRef} />
           </div>
           
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <div style={{ position: 'relative', flex: 1 }}>
-              <input 
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="输入消息或长按麦克风录音..." 
-                style={{ 
-                  width: '100%',
-                  padding: '8px 12px 8px 40px', 
-                  border: '1px solid #d9d9d9', 
-                  borderRadius: '6px',
-                  fontSize: '14px'
-                }}
-              />
-              <div 
-                style={{
-                  position: 'absolute',
-                  left: '10px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  cursor: 'pointer'
-                }}
-                onMouseDown={handleMouseDown}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-                onTouchStart={handleTouchStart}
-                onTouchEnd={handleTouchEnd}
-                onTouchCancel={handleTouchEnd}
-              >
-                {isRecording ? (
-                  <StopOutlined 
-                    style={{ 
-                      color: '#ff4d4f', 
-                      fontSize: '16px',
-                      animation: 'pulse 1s infinite'
-                    }} 
-                  />
-                ) : (
-                  <AudioOutlined style={{ color: '#1890ff', fontSize: '16px' }} />
-                )}
-              </div>
+          {/* 加载状态指示器 */}
+          {loading && (
+            <div style={{
+              textAlign: 'center',
+              padding: '12px',
+              color: '#999',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'sticky',
+              bottom: 0,
+              backgroundColor: '#fafafa',
+              borderTop: '1px solid #f0f0f0',
+              marginTop: 'auto' // 推到容器底部
+            }}>
+              <LoadingOutlined style={{ marginRight: '8px' }} />
+              思考中...
+            </div>
+          )}
+        </div>
+
+        {/* 输入区域 */}
+        <div style={{ 
+          display: 'flex', 
+          gap: '10px', 
+          alignItems: 'center',
+          flexShrink: 0 // 防止输入区域被压缩
+        }}>
+          <div style={{ position: 'relative', flex: 1 }}>
+            <input 
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="输入消息或长按麦克风录音..." 
+              style={{ 
+                width: '100%',
+                padding: '8px 12px 8px 40px', 
+                border: '1px solid #d9d9d9', 
+                borderRadius: '6px',
+                fontSize: '14px',
+                paddingRight: isRecording ? '80px' : '40px',
+                backgroundColor: isRecording ? '#fffaf0' : '#fff',
+                transition: 'all 0.2s'
+              }}
+              disabled={isRecording}
+            />
+            
+            {/* 录音图标 */}
+            <div 
+              style={{
+                position: 'absolute',
+                left: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                cursor: 'pointer',
+                padding: '4px',
+                borderRadius: '50%',
+                backgroundColor: isRecording ? '#fff1f0' : 'transparent',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseDown={handleMouseDown}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchEnd}
+              title="按住录音，松开发送"
+            >
+              {isRecording ? (
+                <StopOutlined 
+                  style={{ 
+                    color: '#ff4d4f', 
+                    fontSize: '16px'
+                  }} 
+                />
+              ) : (
+                <AudioOutlined style={{ color: '#1890ff', fontSize: '16px' }} />
+              )}
             </div>
             
+            {/* 录音时间显示 */}
             {isRecording && (
               <div style={{ 
+                position: 'absolute',
+                right: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
                 fontSize: '12px', 
                 color: '#ff4d4f',
-                minWidth: '40px',
-                textAlign: 'center'
+                fontWeight: 'bold'
               }}>
                 {recordingTime.toFixed(1)}s
               </div>
             )}
-            
-            <Button 
-              type="primary"
-              onClick={() => handleSendMessage()}
-              disabled={(!inputValue.trim() && !isRecording) || loading}
-              icon={loading ? <LoadingOutlined /> : undefined}
-              style={{ 
-                minWidth: '80px',
-                backgroundColor: isRecording ? '#ff4d4f' : '#1890ff'
-              }}
-            >
-              {isRecording ? '停止' : loading ? '发送中' : '发送'}
-            </Button>
           </div>
+          
+          <Button 
+            type="primary"
+            onClick={() => handleSendMessage()}
+            disabled={(!inputValue.trim() && !isRecording) || loading}
+            icon={loading ? <LoadingOutlined /> : undefined}
+            style={{ 
+              minWidth: '80px',
+              backgroundColor: isRecording ? '#ff4d4f' : '#1890ff',
+              borderColor: isRecording ? '#ff4d4f' : '#1890ff'
+            }}
+          >
+            {isRecording ? '停止' : loading ? '发送中' : '发送'}
+          </Button>
         </div>
-        
+
         {/* 录音动画样式 */}
         <style>
           {`

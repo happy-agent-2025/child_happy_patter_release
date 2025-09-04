@@ -79,9 +79,10 @@ Happy Partner是一个专为儿童设计的教育AI系统，结合了多种AI代
 
 1. 克隆项目代码
 2. 安装依赖: `poetry install`
-3. 配置环境变量
+3. 配置环境变量，把.env.example改成.env，并添加大模型的api key和url
 4. 初始化数据库: `python db/init_db.py`
-5. 启动服务: `python main.py`
+5. 安装ffmpeg: `choco install ffmpeg`
+6. 启动服务: `python main.py`
 
 ## 测试
 

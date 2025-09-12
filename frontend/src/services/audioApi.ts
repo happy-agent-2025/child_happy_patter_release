@@ -6,13 +6,30 @@ import {
   AudioSynthesizeResponse
 } from '../types/api';
 
+// 扩展响应类型，确保包含success和data属性
+export interface ExtendedApiResponse<T> {
+  success: boolean;
+  data?: T;
+}
+
+// 扩展音频转写响应类型
+export interface ExtendedAudioTranscribeResponse extends AudioTranscribeResponse {
+  text: string;
+}
+
+// 扩展音频合成响应类型
+export interface ExtendedAudioSynthesizeResponse extends AudioSynthesizeResponse {
+  audio_data: string;
+  format: string; // 移除可选标记，使其与基础接口兼容
+}
+
 // 音频API服务类
 export class AudioApiService {
   
   /**
    * 语音转文本
    */
-  static async transcribeAudio(audioData: AudioTranscribeRequest): Promise<AudioTranscribeResponse> {
+  static async transcribeAudio(audioData: AudioTranscribeRequest): Promise<ExtendedApiResponse<ExtendedAudioTranscribeResponse>> {
     try {
       const formData = new FormData();
       formData.append('file', audioData.file);
@@ -20,7 +37,7 @@ export class AudioApiService {
         formData.append('preprocess', audioData.preprocess.toString());
       }
       
-      const response = await apiRequest.post<AudioTranscribeResponse>(
+      const response = await apiRequest.post(
         API_ENDPOINTS.AUDIO.TRANSCRIBE,
         formData,
         {
@@ -31,7 +48,12 @@ export class AudioApiService {
       );
       
       console.log('[Audio] 语音转文本成功');
-      return response;
+      
+      // 包装响应为统一格式
+      return {
+        success: true,
+        data: response.data as ExtendedAudioTranscribeResponse
+      };
     } catch (error: any) {
       console.error('[Audio] 语音转文本失败:', error.response?.data?.detail || error.message);
       throw new Error(error.response?.data?.detail || '语音转文本失败');
@@ -41,15 +63,20 @@ export class AudioApiService {
   /**
    * 文本转语音
    */
-  static async synthesizeSpeech(synthesizeData: AudioSynthesizeRequest): Promise<AudioSynthesizeResponse> {
+  static async synthesizeSpeech(synthesizeData: AudioSynthesizeRequest): Promise<ExtendedApiResponse<ExtendedAudioSynthesizeResponse>> {
     try {
-      const response = await apiRequest.post<AudioSynthesizeResponse>(
+      const response = await apiRequest.post(
         API_ENDPOINTS.AUDIO.SYNTHESIZE,
         synthesizeData
       );
       
       console.log('[Audio] 文本转语音成功');
-      return response;
+      
+      // 包装响应为统一格式
+      return {
+        success: true,
+        data: response.data as ExtendedAudioSynthesizeResponse
+      };
     } catch (error: any) {
       console.error('[Audio] 文本转语音失败:', error.response?.data?.detail || error.message);
       throw new Error(error.response?.data?.detail || '文本转语音失败');

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import zhCN from 'antd/locale/zh_CN'
 import Layout from './components/Layout'
 import ChatPage from './pages/ChatPage'
+import ParentControlPage from './pages/ParentControlPage'
 // import LoginPage from './pages/LoginPage'
 // import DebugPage from './pages/DebugPage'
 import './App.css'
@@ -13,6 +14,7 @@ function App() {
       <Router>
         <Routes>
           {/* <Route path="/login" element={<LoginPage />} /> */}
+          <Route path="/parent" element={<ParentControlPage />} />
           <Route path="/*" element={
             <Layout>
               <Routes>

@@ -21,6 +21,7 @@
     "react-router-dom": "^7.8.2"
   },
   "devDependencies": {
+    "@types/node": "^24.3.1",
     "@types/react": "^18.2.37",
     "@types/react-dom": "^18.2.15",
     "@typescript-eslint/eslint-plugin": "^6.10.0",

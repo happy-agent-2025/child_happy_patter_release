@@ -11,26 +11,73 @@ export interface ApiResponse<T = any> {
 
 // API端点配置
 export const API_ENDPOINTS = {
-  CHAT: {
-    SEND: '/chat',
-    SAFETY_CHECK: '/chat/safety-check',
-    EDU_ASK: '/chat/edu-ask',
-    EMOTION_SUPPORT: '/chat/emotion-support',
-  },
-  AUDIO: {
-    TRANSCRIBE: '/audio/transcribe',
-    SYNTHESIZE: '/audio/synthesize',
-  },
+  // 认证相关
   AUTH: {
     LOGIN: '/auth/login',
     REGISTER: '/auth/register',
-    LOGOUT: '/auth/logout',
+    ME: '/auth/me',
   },
-  PARENT_CONTROL: {
-    GET_SETTINGS: '/parent-control/settings',
-    UPDATE_SETTINGS: '/parent-control/settings',
-    GET_FILTERS: '/parent-control/filters',
-  }
+  
+  // 聊天相关
+  CHAT: {
+    SEND: '/chat',
+    SAFETY_CHECK: '/safety/check',
+    EDU_ASK: '/edu/ask',
+    EMOTION_SUPPORT: '/emotion/support',
+  },
+  
+  // 音频相关
+  AUDIO: {
+    TRANSCRIBE: '/audio/transcribe',
+    SYNTHESIZE: '/audio/synthesize',
+    PROCESS: '/audio/process',
+  },
+  
+  // 声纹相关
+  VOICE: {
+    REGISTER: '/voice/register',
+    VERIFY: '/voice/verify',
+  },
+  
+  // 记忆管理
+  MEMORY: {
+    MANAGE: '/memory/manage',
+  },
+  
+  // 用户相关
+  USERS: {
+    CONVERSATIONS: (userId: number) => `/users/${userId}/conversations`,
+    RECENT_CONVERSATIONS: (userId: number) => `/users/${userId}/conversations/recent`,
+    CONVERSATION_BY_AGENT: (userId: number, agentType: string) => `/users/${userId}/conversations/${agentType}`,
+    SECURITY_LOGS: (userId: number) => `/users/${userId}/security-logs`,
+    ACTIVITY_STATS: (userId: number) => `/users/${userId}/activity-stats`,
+    LEARNING_PROGRESS: (userId: number) => `/users/${userId}/learning-progress`,
+    CONTENT_FILTERS: (userId: number) => `/users/${userId}/content-filters`,
+    USAGE_LIMITS: (userId: number) => `/users/${userId}/usage-limits`,
+    SESSIONS: (userId: number) => `/users/${userId}/sessions`,
+  },
+  
+  // 会话相关
+  SESSIONS: {
+    INFO: (sessionId: number) => `/sessions/${sessionId}`,
+    DELETE: (sessionId: number) => `/sessions/${sessionId}`,
+    CONVERSATIONS: (sessionId: number) => `/sessions/${sessionId}/conversations`,
+    UPDATE_TITLE: (sessionId: number) => `/sessions/${sessionId}/title`,
+    ACTIVATE: (sessionId: number) => `/sessions/${sessionId}/activate`,
+    DEACTIVATE: (sessionId: number) => `/sessions/${sessionId}/deactivate`,
+  },
+
+  // LangGraph相关
+  LANGGRAPH: {
+    CHAT: '/langgraph/chat',
+    CHAT_STREAM: '/langgraph/chat/stream',
+    WORKFLOW_STATE: '/langgraph/workflow/state',
+    CONVERSATION_FLOW: '/langgraph/analytics/conversation-flow',
+    CREATE_SESSION: '/langgraph/session/create',
+    SESSION_HISTORY: (sessionId: number) => `/langgraph/session/${sessionId}/history`,
+    USER_INSIGHTS: (userId: number) => `/langgraph/users/${userId}/insights`,
+    TEST_WORKFLOW: '/langgraph/test/workflow',
+  },
 };
 
 // 创建axios实例

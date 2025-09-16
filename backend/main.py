@@ -16,10 +16,11 @@ else:
 
 # 导入路由
 from api.routes import router
+from api.langgraph_routes import router as langgraph_router
 
-app = FastAPI(title="Happy Partner - 儿童教育AI系统", 
-              description="一个多代理架构的儿童教育AI系统，专注于教育辅助和情感陪伴",
-              version="0.1.0")
+app = FastAPI(title="Happy Partner - 儿童教育AI系统",
+              description="一个多代理架构的儿童教育AI系统，专注于教育辅助和情感陪伴 - 支持LangGraph工作流",
+              version="0.2.0")
 
 # 添加CORS中间件
 app.add_middleware(
@@ -32,6 +33,7 @@ app.add_middleware(
 
 # 包含路由
 app.include_router(router, prefix="/api")
+app.include_router(langgraph_router, prefix="/api")
 
 @app.get("/")
 async def root():

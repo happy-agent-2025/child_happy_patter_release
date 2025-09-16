@@ -146,4 +146,16 @@ export const API_ENDPOINTS = {
     ACTIVATE: (sessionId: number) => `/sessions/${sessionId}/activate`,
     DEACTIVATE: (sessionId: number) => `/sessions/${sessionId}/deactivate`,
   },
+
+  // LangGraph相关
+  LANGGRAPH: {
+    CHAT: '/langgraph/chat',
+    CHAT_STREAM: '/langgraph/chat/stream',
+    WORKFLOW_STATE: '/langgraph/workflow/state',
+    CONVERSATION_FLOW: '/langgraph/analytics/conversation-flow',
+    CREATE_SESSION: '/langgraph/session/create',
+    SESSION_HISTORY: (sessionId: number) => `/langgraph/session/${sessionId}/history`,
+    USER_INSIGHTS: (userId: number) => `/langgraph/users/${userId}/insights`,
+    TEST_WORKFLOW: '/langgraph/test/workflow',
+  },
 };

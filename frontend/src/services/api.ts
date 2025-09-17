@@ -1,149 +1,201 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosInstance, AxiosResponse, AxiosError } from 'axios';
 
-// 创建axios实例
-const api: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8001/api',
-  timeout: 100000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+// 统一的API响应格式
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  error?: string;
+  code?: number;
+}
 
-// 请求拦截器
-api.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    // 从localStorage获取JWT令牌
-    const token = localStorage.getItem('access_token');
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    
-    // 添加请求时间戳
-    console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url} - ${new Date().toISOString()}`);
-    
-    return config;
-  },
-  (error) => {
-    console.error('[API Request Error]', error);
-    return Promise.reject(error);
-  }
-);
-
-// 响应拦截器
-api.interceptors.response.use(
-  (response: AxiosResponse) => {
-    console.log(`[API Response] ${response.status} ${response.config.url} - ${new Date().toISOString()}`);
-    console.log('[API Response Data]', response.data);
-    return response;
-  },
-  (error) => {
-    console.error('[API Response Error] 详细错误信息:', {
-      message: error.message,
-      code: error.code,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data,
-      config: {
-        url: error.config?.url,
-        method: error.config?.method,
-        data: error.config?.data
-      }
-    });
-    
-    // 处理401未授权错误
-    if (error.response?.status === 401) {
-      // 清除本地存储的令牌
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user_info');
-      
-      // 重定向到登录页面
-      window.location.href = '/login';
-    }
-    
-    // 处理网络错误
-    if (!error.response) {
-      error.message = '网络连接错误，请检查您的网络设置';
-    }
-    
-    return Promise.reject(error);
-  }
-);
-
-export default api;
-
-// 导出常用的HTTP方法
-export const apiRequest = {
-  get: <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> => 
-    api.get(url, config).then(response => response.data),
-    
-  post: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => 
-    api.post(url, data, config).then(response => response.data),
-    
-  put: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => 
-    api.put(url, data, config).then(response => response.data),
-    
-  delete: <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> => 
-    api.delete(url, config).then(response => response.data),
-    
-  patch: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => 
-    api.patch(url, data, config).then(response => response.data),
-};
-
-// API端点常量
+// API端点配置
 export const API_ENDPOINTS = {
-  // 认证相关
-  AUTH: {
-    LOGIN: '/auth/login',
-    REGISTER: '/auth/register',
-    ME: '/auth/me',
-  },
-  
-  // 聊天相关
   CHAT: {
     SEND: '/chat',
-    SAFETY_CHECK: '/safety/check',
-    EDU_ASK: '/edu/ask',
-    EMOTION_SUPPORT: '/emotion/support',
+    SAFETY_CHECK: '/chat/safety-check',
+    EDU_ASK: '/chat/edu-ask',
+    EMOTION_SUPPORT: '/chat/emotion-support',
   },
-  
-  // 音频相关
   AUDIO: {
     TRANSCRIBE: '/audio/transcribe',
     SYNTHESIZE: '/audio/synthesize',
-    PROCESS: '/audio/process',
   },
-  
-  // 声纹相关
-  VOICE: {
-    REGISTER: '/voice/register',
-    VERIFY: '/voice/verify',
+  AUTH: {
+    LOGIN: '/auth/login',
+    REGISTER: '/auth/register',
+    LOGOUT: '/auth/logout',
   },
-  
-  // 记忆管理
-  MEMORY: {
-    MANAGE: '/memory/manage',
-  },
-  
-  // 用户相关
-  USERS: {
-    CONVERSATIONS: (userId: number) => `/users/${userId}/conversations`,
-    RECENT_CONVERSATIONS: (userId: number) => `/users/${userId}/conversations/recent`,
-    CONVERSATION_BY_AGENT: (userId: number, agentType: string) => `/users/${userId}/conversations/${agentType}`,
-    SECURITY_LOGS: (userId: number) => `/users/${userId}/security-logs`,
-    ACTIVITY_STATS: (userId: number) => `/users/${userId}/activity-stats`,
-    LEARNING_PROGRESS: (userId: number) => `/users/${userId}/learning-progress`,
-    CONTENT_FILTERS: (userId: number) => `/users/${userId}/content-filters`,
-    USAGE_LIMITS: (userId: number) => `/users/${userId}/usage-limits`,
-    SESSIONS: (userId: number) => `/users/${userId}/sessions`,
-  },
-  
-  // 会话相关
-  SESSIONS: {
-    INFO: (sessionId: number) => `/sessions/${sessionId}`,
-    DELETE: (sessionId: number) => `/sessions/${sessionId}`,
-    CONVERSATIONS: (sessionId: number) => `/sessions/${sessionId}/conversations`,
-    UPDATE_TITLE: (sessionId: number) => `/sessions/${sessionId}/title`,
-    ACTIVATE: (sessionId: number) => `/sessions/${sessionId}/activate`,
-    DEACTIVATE: (sessionId: number) => `/sessions/${sessionId}/deactivate`,
-  },
+  PARENT_CONTROL: {
+    GET_SETTINGS: '/parent-control/settings',
+    UPDATE_SETTINGS: '/parent-control/settings',
+    GET_FILTERS: '/parent-control/filters',
+  }
 };
+
+// 创建axios实例
+const createApiInstance = (): AxiosInstance => {
+  const instance = axios.create({
+    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
+    timeout: 30000,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  // 请求拦截器
+  instance.interceptors.request.use(
+    (config) => {
+      // 添加认证token
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+
+      // 添加请求ID用于追踪
+      config.headers['X-Request-ID'] = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, {
+        headers: config.headers,
+        data: config.data
+      });
+
+      return config;
+    },
+    (error) => {
+      console.error('[API Request Error]', error);
+      return Promise.reject(error);
+    }
+  );
+
+  // 响应拦截器
+  instance.interceptors.response.use(
+    (response: AxiosResponse): AxiosResponse<ApiResponse> => {
+      console.log(`[API Response] ${response.config.method?.toUpperCase()} ${response.config.url}`, {
+        status: response.status,
+        data: response.data
+      });
+
+      // 统一响应格式处理
+      const originalData = response.data;
+      
+      // 如果后端已经返回标准格式，直接使用
+      if (originalData && typeof originalData === 'object' && 'success' in originalData) {
+        return response;
+      }
+
+      // 否则包装成标准格式
+      const wrappedData: ApiResponse = {
+        success: true,
+        data: originalData,
+        message: 'Success'
+      };
+
+      response.data = wrappedData;
+      return response;
+    },
+    (error: AxiosError) => {
+      console.error('[API Response Error]', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        config: {
+          method: error.config?.method,
+          url: error.config?.url,
+          baseURL: error.config?.baseURL
+        }
+      });
+
+      // 统一错误格式处理
+      const errorResponse: ApiResponse = {
+        success: false,
+        error: error.message,
+        message: getErrorMessage(error),
+        code: error.response?.status || 0
+      };
+
+      // 特殊错误处理
+      if (error.response?.status === 401) {
+        // 未授权，清除token并跳转登录
+        localStorage.removeItem('auth_token');
+        window.location.href = '/login';
+      }
+
+      // 将错误包装成标准格式并抛出
+      const wrappedError = new Error(errorResponse.message);
+      (wrappedError as any).response = {
+        ...error.response,
+        data: errorResponse
+      };
+
+      return Promise.reject(wrappedError);
+    }
+  );
+
+  return instance;
+};
+
+// 获取错误消息
+const getErrorMessage = (error: AxiosError): string => {
+  if (error.response?.data) {
+    const data = error.response.data as any;
+    
+    // 尝试从不同字段获取错误消息
+    if (data.detail) return data.detail;
+    if (data.message) return data.message;
+    if (data.error) return data.error;
+    if (typeof data === 'string') return data;
+  }
+
+  // 根据状态码返回默认消息
+  switch (error.response?.status) {
+    case 400:
+      return '请求参数错误';
+    case 401:
+      return '未授权访问';
+    case 403:
+      return '禁止访问';
+    case 404:
+      return '请求的资源不存在';
+    case 500:
+      return '服务器内部错误';
+    case 502:
+      return '网关错误';
+    case 503:
+      return '服务暂时不可用';
+    case 504:
+      return '网关超时';
+    default:
+      if (error.code === 'ECONNABORTED') {
+        return '请求超时，请重试';
+      }
+      if (error.code === 'ERR_NETWORK') {
+        return '网络连接失败，请检查网络';
+      }
+      return error.message || '未知错误';
+  }
+};
+
+// 创建API实例
+export const apiRequest = createApiInstance();
+
+// 导出便捷方法
+export const api = {
+  get: <T = any>(url: string, config?: any): Promise<ApiResponse<T>> =>
+    apiRequest.get(url, config).then(res => res.data),
+    
+  post: <T = any>(url: string, data?: any, config?: any): Promise<ApiResponse<T>> =>
+    apiRequest.post(url, data, config).then(res => res.data),
+    
+  put: <T = any>(url: string, data?: any, config?: any): Promise<ApiResponse<T>> =>
+    apiRequest.put(url, data, config).then(res => res.data),
+    
+  delete: <T = any>(url: string, config?: any): Promise<ApiResponse<T>> =>
+    apiRequest.delete(url, config).then(res => res.data),
+    
+  patch: <T = any>(url: string, data?: any, config?: any): Promise<ApiResponse<T>> =>
+    apiRequest.patch(url, data, config).then(res => res.data),
+};
+
+export default api;

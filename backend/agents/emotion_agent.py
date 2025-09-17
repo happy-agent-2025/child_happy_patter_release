@@ -1,5 +1,7 @@
 from typing import Dict, Any, List
 from utils.openai_client import openai_client
+from utils.ollama_client import ollama_client
+from config.settings import settings
 
 
 class EmotionAgent:
@@ -89,12 +91,19 @@ class EmotionAgent:
             {"role": "user", "content": prompt}
         ]
         
-        # 调用OpenAI API进行情绪分析
-        response = openai_client.chat_completion(
-            messages=messages,
-            temperature=0.3,
-            max_tokens=200
-        )
+        # 根据配置选择使用OpenAI还是Ollama
+        if settings.use_ollama:
+            response = ollama_client.chat_completion(
+                messages=messages,
+                temperature=0.3,
+                max_tokens=200
+            )
+        else:
+            response = openai_client.chat_completion(
+                messages=messages,
+                temperature=0.3,
+                max_tokens=200
+            )
         
         # 解析响应
         lines = response.strip().split('\n')
@@ -154,12 +163,19 @@ class EmotionAgent:
             {"role": "user", "content": prompt}
         ]
         
-        # 调用OpenAI API提供情感支持
-        response = openai_client.chat_completion(
-            messages=messages,
-            temperature=0.7,
-            max_tokens=400
-        )
+        # 根据配置选择使用OpenAI还是Ollama
+        if settings.use_ollama:
+            response = ollama_client.chat_completion(
+                messages=messages,
+                temperature=0.7,
+                max_tokens=400
+            )
+        else:
+            response = openai_client.chat_completion(
+                messages=messages,
+                temperature=0.7,
+                max_tokens=400
+            )
         
         return response
     

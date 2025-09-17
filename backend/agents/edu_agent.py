@@ -1,5 +1,7 @@
 from typing import Dict, Any
 from utils.openai_client import openai_client
+from utils.ollama_client import ollama_client
+from config.settings import settings
 
 
 class EduAgent:
@@ -70,13 +72,20 @@ class EduAgent:
             {"role": "user", "content": prompt}
         ]
         
-        # 调用OpenAI API进行学科判断
+        # 根据配置选择使用OpenAI还是Ollama
         try:
-            response = openai_client.chat_completion(
-                messages=messages,
-                temperature=0.1,
-                max_tokens=10
-            )
+            if settings.use_ollama:
+                response = ollama_client.chat_completion(
+                    messages=messages,
+                    temperature=0.1,
+                    max_tokens=10
+                )
+            else:
+                response = openai_client.chat_completion(
+                    messages=messages,
+                    temperature=0.1,
+                    max_tokens=10
+                )
             subject = response.strip()
             # 验证返回的学科是否在我们的学科列表中
             if subject in self.subjects:
@@ -159,12 +168,19 @@ class EduAgent:
             {"role": "user", "content": prompt}
         ]
         
-        # 调用OpenAI API进行教育问答
-        response = openai_client.chat_completion(
-            messages=messages,
-            temperature=0.7,
-            max_tokens=500
-        )
+        # 根据配置选择使用OpenAI还是Ollama
+        if settings.use_ollama:
+            response = ollama_client.chat_completion(
+                messages=messages,
+                temperature=0.7,
+                max_tokens=500
+            )
+        else:
+            response = openai_client.chat_completion(
+                messages=messages,
+                temperature=0.7,
+                max_tokens=500
+            )
         
         return response
     

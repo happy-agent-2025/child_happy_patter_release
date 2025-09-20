@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/datawhale/Projects/child_happy_patter_release/frontend/src/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

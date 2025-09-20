@@ -20,6 +20,10 @@ from .memory import (
     SecurityLogItem, SecurityLogListResponse
 )
 
+from .session import (
+    SessionCreateRequest, SessionResponse, SessionUpdateRequest
+)
+
 __all__ = [
     'Token', 'TokenData', 'UserCreate', 'UserLogin', 'UserResponse', 'UserUpdate',
     'ChatRequest', 'ChatResponse',
@@ -34,5 +38,6 @@ __all__ = [
     'MemoryActionRequest', 'MemoryActionResponse',
     'ConversationHistoryResponse', 'SecurityLogResponse',
     'ConversationItem', 'ConversationListResponse',
-    'SecurityLogItem', 'SecurityLogListResponse'
+    'SecurityLogItem', 'SecurityLogListResponse',
+    'SessionCreateRequest', 'SessionResponse', 'SessionUpdateRequest'
 ]

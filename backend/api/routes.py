@@ -8,6 +8,14 @@ import os
 import json
 import logging
 
+from services.stt_service import STTService
+from services.tts_service import TTSService
+from services.fish_speech_service import FishSpeechService # 新增导入
+from services.processing import AudioProcessingService
+
+import io # 新增导入
+import soundfile as sf
+
 # 配置日志
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -61,9 +69,11 @@ emotion_agent = EmotionAgent()
 # 初始化音频服务
 stt_service = STTService()
 tts_service = TTSService("edge_tts")
+fish_speech_service = FishSpeechService() # 初始化 Fish-Speech 服务
 audio_processing_service = AudioProcessingService()
 voice_verification_service = VoiceVerificationService()
 audio_codec_service = AudioCodecService()
+
 
 
 @router.post("/chat", response_model=Dict[str, Any])
@@ -726,6 +736,56 @@ async def synthesize_audio(request: AudioSynthesizeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"语音合成失败: {str(e)}")
 
+# child_happy_patter_release/backend/api/routes.py
+# ... (在 synthesize_audio 函数下方添加)
+
+@router.post("/audio/synthesize/fish", response_model=AudioSynthesizeResponse)
+async def synthesize_audio_with_fish(request: AudioSynthesizeRequest):
+    """
+    使用Fish-Speech模型进行文本转语音。
+
+    - **text**: 要合成的文本内容
+
+    返回合成的音频数据和相关信息。
+    """
+    try:
+        if not request.text:
+            raise HTTPException(status_code=400, detail="文本内容不能为空")
+
+        # 使用Fish-Speech服务合成语音
+        # 返回结果通常包含一个 NumPy 数组和一个采样率
+        audio_output = fish_speech_service.synthesize_speech(request.text)
+
+        if audio_output and "audio" in audio_output:
+            # 获取 NumPy 数组和采样率
+            audio_data_np = audio_output["audio"]
+            sample_rate = audio_output.get("sampling_rate", 16000)
+
+            # 将 NumPy 数组转换为 WAV 格式的 bytes
+            audio_buffer = io.BytesIO()
+            # 使用 soundfile 库将数组写入内存缓冲区
+            sf.write(audio_buffer, audio_data_np, sample_rate, format='WAV')
+            audio_data_bytes = audio_buffer.getvalue()
+
+            audio_duration = len(audio_data_np) / sample_rate
+
+            return AudioSynthesizeResponse(
+                # 将 bytes 转换为十六进制字符串表示，以便在 JSON 中传输
+                audio_data=audio_data_bytes.hex(),
+                duration=audio_duration,
+                format="wav",
+                sample_rate=sample_rate
+            )
+        else:
+            logger.error("音频处理失败")
+            return AudioSynthesizeResponse(
+                audio_data="",
+                duration=0,
+                format="wav",
+                sample_rate=16000
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"语音合成失败: {str(e)}")
 
 @router.post("/audio/process", response_model=AudioProcessResponse)
 async def process_audio(file: UploadFile = File(...), 

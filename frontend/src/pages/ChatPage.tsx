@@ -3,9 +3,10 @@ import { Card, Typography, message, Button } from 'antd';
 import { 
   AudioOutlined, 
   StopOutlined, 
-  LoadingOutlined 
+  LoadingOutlined
 } from '@ant-design/icons';
 import MessageList from '../components/MessageList';
+import SafetyFilter from '../components/SafetyFilter';
 import { ChatApiService } from '../services/chatApi';
 import { AudioApiService } from '../services/audioApi';
 
@@ -75,6 +76,11 @@ const ChatPage: React.FC = () => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<number | null>(null);
+  
+  // 安全过滤状态
+  const [safetyFilterEnabled, setSafetyFilterEnabled] = useState<boolean>(true);
+  const [contentToFilter, setContentToFilter] = useState<string>('');
+  const [showSafetyFilter, setShowSafetyFilter] = useState<boolean>(false);
   
   // 开始录音
   const startRecording = useCallback(async () => {
@@ -155,8 +161,8 @@ const ChatPage: React.FC = () => {
             });
             
             // 发送识别后的文本到聊天
-            if (transcribeResponse.text && transcribeResponse.text.trim()) {
-              await handleSendMessage(transcribeResponse.text);
+            if (transcribeResponse.success && transcribeResponse.data && transcribeResponse.data.text && transcribeResponse.data.text.trim()) {
+              await handleSendMessage(transcribeResponse.data.text);
             } else {
               message.warning('未识别到有效语音内容');
             }
@@ -203,6 +209,116 @@ const ChatPage: React.FC = () => {
     }
   }, [isRecording]);
 
+  // 处理安全过滤完成
+  const handleFilterComplete = (filteredContent: string, isSafe: boolean) => {
+    setShowSafetyFilter(false);
+    
+    // 如果内容安全或已过滤，继续发送消息
+    if (isSafe && filteredContent.trim()) {
+      sendMessageToAPI(filteredContent);
+    } else {
+      setLoading(false);
+      message.warning('消息内容不适宜，已被过滤');
+    }
+  };
+  
+  // 发送消息到API
+  const sendMessageToAPI = async (messageContent: string) => {
+    try {
+      console.log('发送消息:', messageContent);
+      
+      // 调用聊天API
+      console.log('正在调用API...', `${import.meta.env.VITE_API_BASE_URL}/chat`);
+      const response = await ChatApiService.intelligentChat(messageContent, 1);
+      
+      // 添加AI回复消息
+      console.log('API响应:', response);
+      console.log('响应字段检查:', {
+        hasResponse: !!response.response,
+        hasAnswer: !!response.answer,
+        hasMessage: !!response.message,
+        hasResult: !!response.result,
+        hasAgent: !!response.agent,
+        responseKeys: Object.keys(response)
+      });
+      
+      // 根据后端实际返回格式解析内容
+      let aiContent = '抱歉，我无法理解您的问题。';
+      if (response.result && response.result.filtered_content) {
+        // 安全检查代理返回格式
+        aiContent = response.result.filtered_content;
+      } else if (response.response) {
+        // 教育代理返回格式
+        aiContent = response.response;
+      } else if (response.answer) {
+        // 其他代理可能的返回格式
+        aiContent = response.answer;
+      } else if (response.message) {
+        // 错误消息格式
+        aiContent = response.message;
+      } else if (typeof response === 'string') {
+        // 如果响应本身就是字符串
+        aiContent = response;
+      } else {
+        // 尝试将响应转换为字符串
+        aiContent = JSON.stringify(response, null, 2);
+      }
+      
+      // 文本转语音播放
+      try {
+        const ttsResponse = await AudioApiService.synthesizeSpeech({
+          text: aiContent,
+          voice_type: 'female',
+          speed: 1.0,
+          volume: 1.0
+        });
+
+        console.log('文本转语音成功，播放中...', ttsResponse);
+        
+        if (ttsResponse.success && ttsResponse.data && ttsResponse.data.audio_data) {
+          await AudioApiService.playAudio(ttsResponse.data.audio_data, ttsResponse.data.format || 'wav');
+        }
+      } catch (ttsError) {
+        console.warn('文本转语音失败:', ttsError);
+        // 不阻止正常聊天流程，只是无法播放语音
+      }
+      
+      const aiMessage: Message = {
+        id: Date.now(), // 使用时间戳作为唯一ID
+        content: aiContent,
+        sender: 'assistant',
+        timestamp: new Date(),
+        agentType: response.agent || response.agent_type || 'edu', // 从响应中获取代理类型
+      };
+      
+      // 使用函数式更新确保获取最新的消息状态
+      setMessages(prevMessages => [...prevMessages, aiMessage]);
+      
+    } catch (error: any) {
+      console.error('发送消息失败 - 详细错误:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        stack: error.stack
+      });
+      message.error('发送消息失败，请重试');
+      
+      // 发送失败时添加错误消息
+      const errorMessage: Message = {
+        id: Date.now(),
+        content: '抱歉，消息发送失败，请稍后重试。',
+        sender: 'assistant',
+        timestamp: new Date(),
+        agentType: 'meta',
+      };
+      
+      // 使用函数式更新确保获取最新的消息状态
+      setMessages(prevMessages => [...prevMessages, errorMessage]);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   // 处理消息发送
   const handleSendMessage = async (content?: string) => {
     const messageContent = content || inputValue;
@@ -222,100 +338,13 @@ const ChatPage: React.FC = () => {
       }
       setLoading(true);
       
-      const currentInput = messageContent;
-      
-      try {
-        console.log('发送消息:', currentInput);
-        
-        // 调用聊天API
-        console.log('正在调用API...', `${import.meta.env.VITE_API_BASE_URL}/chat`);
-        const response = await ChatApiService.intelligentChat(currentInput, 1);
-        
-        // 添加AI回复消息
-        console.log('API响应:', response);
-        console.log('响应字段检查:', {
-          hasResponse: !!response.response,
-          hasAnswer: !!response.answer,
-          hasMessage: !!response.message,
-          hasResult: !!response.result,
-          hasAgent: !!response.agent,
-          responseKeys: Object.keys(response)
-        });
-        
-        // 根据后端实际返回格式解析内容
-        let aiContent = '抱歉，我无法理解您的问题。';
-        if (response.result && response.result.filtered_content) {
-          // 安全检查代理返回格式
-          aiContent = response.result.filtered_content;
-        } else if (response.response) {
-          // 教育代理返回格式
-          aiContent = response.response;
-        } else if (response.answer) {
-          // 其他代理可能的返回格式
-          aiContent = response.answer;
-        } else if (response.message) {
-          // 错误消息格式
-          aiContent = response.message;
-        } else if (typeof response === 'string') {
-          // 如果响应本身就是字符串
-          aiContent = response;
-        } else {
-          // 尝试将响应转换为字符串
-          aiContent = JSON.stringify(response, null, 2);
-        }
-        
-        // 文本转语音播放
-        try {
-          const ttsResponse = await AudioApiService.synthesizeSpeech({
-            text: aiContent,
-            voice_type: 'female',
-            speed: 1.0,
-            volume: 1.0
-          });
-
-          console.log('文本转语音成功，播放中...', ttsResponse);
-          
-          if (ttsResponse.audio_data) {
-            await AudioApiService.playAudio(ttsResponse.audio_data, ttsResponse.format);
-          }
-        } catch (ttsError) {
-          console.warn('文本转语音失败:', ttsError);
-          // 不阻止正常聊天流程，只是无法播放语音
-        }
-        
-        const aiMessage: Message = {
-          id: Date.now(), // 使用时间戳作为唯一ID
-          content: aiContent,
-          sender: 'assistant',
-          timestamp: new Date(),
-          agentType: response.agent || response.agent_type || 'edu', // 从响应中获取代理类型
-        };
-        
-        // 使用函数式更新确保获取最新的消息状态
-        setMessages(prevMessages => [...prevMessages, aiMessage]);
-        
-      } catch (error: any) {
-        console.error('发送消息失败 - 详细错误:', {
-          message: error.message,
-          response: error.response?.data,
-          status: error.response?.status,
-          stack: error.stack
-        });
-        message.error('发送消息失败，请重试');
-        
-        // 发送失败时添加错误消息
-        const errorMessage: Message = {
-          id: Date.now(),
-          content: '抱歉，消息发送失败，请稍后重试。',
-          sender: 'assistant',
-          timestamp: new Date(),
-          agentType: 'meta',
-        };
-        
-        // 使用函数式更新确保获取最新的消息状态
-        setMessages(prevMessages => [...prevMessages, errorMessage]);
-      } finally {
-        setLoading(false);
+      // 检查是否启用安全过滤
+      if (safetyFilterEnabled) {
+        setContentToFilter(messageContent);
+        setShowSafetyFilter(true);
+      } else {
+        // 不需要过滤，直接发送
+        sendMessageToAPI(messageContent);
       }
     }
   };
@@ -460,6 +489,27 @@ const ChatPage: React.FC = () => {
           )}
         </div>
 
+        {/* 安全过滤开关 */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          marginBottom: '8px',
+          padding: '8px 0',
+          borderTop: '1px solid #f0f0f0'
+        }}>
+          <Text type="secondary" style={{ fontSize: '12px' }}>
+            安全过滤: {safetyFilterEnabled ? '已启用' : '已关闭'}
+          </Text>
+          <Button 
+            size="small" 
+            type={safetyFilterEnabled ? 'primary' : 'default'}
+            onClick={() => setSafetyFilterEnabled(!safetyFilterEnabled)}
+          >
+            {safetyFilterEnabled ? '关闭过滤' : '启用过滤'}
+          </Button>
+        </div>
+
         {/* 输入区域 */}
         <div style={{ 
           display: 'flex', 
@@ -561,6 +611,15 @@ const ChatPage: React.FC = () => {
           `}
         </style>
       </Card>
+      
+      {/* 安全过滤组件 */}
+      {showSafetyFilter && (
+        <SafetyFilter
+          content={contentToFilter}
+          onFilterComplete={handleFilterComplete}
+          userId={1} // 默认用户ID
+        />
+      )}
     </div>
   );
 };

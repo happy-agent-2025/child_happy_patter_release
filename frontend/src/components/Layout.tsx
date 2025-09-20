@@ -1,10 +1,9 @@
 import React from 'react';
-import { Layout as AntLayout, Menu } from 'antd';
-// import { 
-//   MessageOutlined, 
-//   UserOutlined,
-//   AudioOutlined 
-// } from '@ant-design/icons';
+import { Layout as AntLayout, Button } from 'antd';
+import { Link } from 'react-router-dom';
+import { 
+  LockOutlined
+} from '@ant-design/icons';
 
 const { Header, Sider, Content } = AntLayout;
 
@@ -64,7 +63,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           boxShadow: '0 1px 4px rgba(0,21,41,0.1)'
         }}>
           <h2 style={{ margin: 0, color: '#1890ff' }}>儿童教育AI助手</h2>
-          <div style={{ color: '#666' }}>欢迎使用</div>
+          <div>
+            <Link to="/parent">
+              <Button 
+                type="text" 
+                icon={<LockOutlined />} 
+                size="small"
+                style={{ color: '#666' }}
+              >
+                家长控制
+              </Button>
+            </Link>
+          </div>
         </Header>
         
         <Content style={{ 

@@ -20,7 +20,7 @@ export const API_ENDPOINTS = {
   
   // 聊天相关
   CHAT: {
-    SEND: '/chat',
+    SEND: '/langgraph/chat',
     SAFETY_CHECK: '/safety/check',
     EDU_ASK: '/edu/ask',
     EMOTION_SUPPORT: '/emotion/support',

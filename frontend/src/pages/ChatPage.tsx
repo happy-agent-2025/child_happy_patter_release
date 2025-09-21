@@ -140,6 +140,31 @@ const ChatPage: React.FC = () => {
           audioChunksRef.current.push(event.data);
         }
       };
+
+      // 在组件内部或外部添加这个辅助函数
+      const extractTranscriptionText = (response: any): { text: string; data: any } => {
+        if (!response?.data) {
+          return { text: '', data: null };
+        }
+        
+        // 检查是否是嵌套结构 (response.data.data)
+        if (response.data.data && typeof response.data.data === 'object') {
+          return {
+            text: response.data.data.text || '',
+            data: response.data.data
+          };
+        }
+        
+        // 检查是否是直接结构 (response.data)
+        if (typeof response.data === 'object') {
+          return {
+            text: response.data.text || '',
+            data: response.data
+          };
+        }
+        
+        return { text: '', data: null };
+      };
       
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { 
@@ -160,9 +185,14 @@ const ChatPage: React.FC = () => {
               preprocess: true
             });
             
+            // 然后在语音识别处理部分使用
+            const { text: recognizedText, data: transcriptionData } = extractTranscriptionText(transcribeResponse);
+            console.log('识别文本:', recognizedText);
+            console.log('完整数据:', transcriptionData);
+
             // 发送识别后的文本到聊天
-            if (transcribeResponse.success && transcribeResponse.data && transcribeResponse.data.text && transcribeResponse.data.text.trim()) {
-              await handleSendMessage(transcribeResponse.data.text);
+            if (transcribeResponse.success && recognizedText) {
+              await handleSendMessage(recognizedText);
             } else {
               message.warning('未识别到有效语音内容');
             }
@@ -332,6 +362,7 @@ const ChatPage: React.FC = () => {
       };
       
       // 立即添加用户消息到界面
+      console.log('发送消息:', messageContent);
       setMessages(prev => [...prev, userMessage]);
       if (!content) {
         setInputValue('');

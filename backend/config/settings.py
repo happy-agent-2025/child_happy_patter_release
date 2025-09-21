@@ -24,8 +24,8 @@ class Settings(BaseSettings):  # type: ignore
 
     # Ollama配置
     use_ollama: bool = os.environ.get("USE_OLLAMA", "true").lower() == "true"
-    ollama_base_url: str = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-    ollama_default_model: str = os.environ.get("OLLAMA_DEFAULT_MODEL", "emotion_final")
+    ollama_base_url: str = os.environ.get("OLLAMA_BASE_URL", "http://100.64.255.128:11434")
+    ollama_default_model: str = os.environ.get("OLLAMA_DEFAULT_MODEL", "paopao")
     ollama_timeout: int = int(os.environ.get("OLLAMA_TIMEOUT", "60"))
 
     # 移除env_file配置以避免加载问题

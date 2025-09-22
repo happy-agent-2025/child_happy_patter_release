@@ -7,17 +7,70 @@ import sys
 import os
 import json
 import logging
+import numpy as np  
+# ---------------- ChatTTS 源码版集成 ----------------
+import sys, os, io, torch, torchaudio
+
+_CHATTS_SRC = os.path.abspath(
+    os.path.join(
+        os.path.dirname(__file__),
+        "../models/ChatTTS"      # 子模块或软链路径
+    )
+)
+sys.path.insert(0, _CHATTS_SRC)
+import ChatTTS          # 现在导入的是源码版
+
+_CHAT_TTS_ENGINE = None
+def _get_chattts_engine():
+    global _CHAT_TTS_ENGINE
+    if _CHAT_TTS_ENGINE is None:
+        try:
+            model_dir = os.path.join(
+                os.path.dirname(__file__),
+                "../models/ChatTTS"
+            )
+            
+            # 检查模型目录是否存在
+            if not os.path.exists(model_dir):
+                raise Exception(f"ChatTTS 模型目录不存在: {model_dir}")
+            
+            # 初始化 ChatTTS
+            _CHAT_TTS_ENGINE = ChatTTS.Chat()
+            
+            # 尝试不同的加载方式
+            try:
+                # 方式1: 从本地目录加载
+                _CHAT_TTS_ENGINE.load(compile=False, source="local", local_path=model_dir)
+            except:
+                # 方式2: 使用默认方式加载
+                _CHAT_TTS_ENGINE.load(compile=False)
+                
+            logger.info("ChatTTS 引擎加载成功")
+            
+        except Exception as e:
+            logger.error(f"ChatTTS 引擎加载失败: {str(e)}")
+            raise
+    
+    return _CHAT_TTS_ENGINE
+# ---------------------------------------------------
 
 from services.stt_service import STTService
 from services.tts_service import TTSService
-from services.fish_speech_service import FishSpeechService # 新增导入
 from services.processing import AudioProcessingService
 
 import io # 新增导入
 import soundfile as sf
 
 # 配置日志
-logging.basicConfig(level=logging.WARNING)
+# 配置更详细的日志
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('app.log')
+    ]
+)
 logger = logging.getLogger(__name__)
 
 # 添加项目根目录到Python路径
@@ -69,7 +122,6 @@ emotion_agent = EmotionAgent()
 # 初始化音频服务
 stt_service = STTService()
 tts_service = TTSService("edge_tts")
-fish_speech_service = FishSpeechService() # 初始化 Fish-Speech 服务
 audio_processing_service = AudioProcessingService()
 voice_verification_service = VoiceVerificationService()
 audio_codec_service = AudioCodecService()
@@ -736,57 +788,64 @@ async def synthesize_audio(request: AudioSynthesizeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"语音合成失败: {str(e)}")
 
-# child_happy_patter_release/backend/api/routes.py
-# ... (在 synthesize_audio 函数下方添加)
-
-@router.post("/audio/synthesize/fish", response_model=AudioSynthesizeResponse)
-async def synthesize_audio_with_fish(request: AudioSynthesizeRequest):
+@router.post("/audio/synthesize/chattts", response_model=AudioSynthesizeResponse)
+async def synthesize_audio_with_chattts(request: AudioSynthesizeRequest):
     """
-    使用Fish-Speech模型进行文本转语音。
-
-    - **text**: 要合成的文本内容
-
-    返回合成的音频数据和相关信息。
+    使用 ChatTTS 模型进行文本转语音
     """
+    if not request.text:
+        raise HTTPException(status_code=400, detail="文本内容不能为空")
+
     try:
-        if not request.text:
-            raise HTTPException(status_code=400, detail="文本内容不能为空")
+        engine = _get_chattts_engine()
+        
+        # 确保输入文本是字符串类型
+        input_text = request.text
+        if isinstance(input_text, bytes):
+            input_text = input_text.decode('utf-8')
 
-        # 使用Fish-Speech服务合成语音
-        # 返回结果通常包含一个 NumPy 数组和一个采样率
-        audio_output = fish_speech_service.synthesize_speech(request.text)
-
-        if audio_output and "audio" in audio_output:
-            # 获取 NumPy 数组和采样率
-            audio_data_np = audio_output["audio"]
-            sample_rate = audio_output.get("sampling_rate", 16000)
-
-            # 将 NumPy 数组转换为 WAV 格式的 bytes
-            audio_buffer = io.BytesIO()
-            # 使用 soundfile 库将数组写入内存缓冲区
-            sf.write(audio_buffer, audio_data_np, sample_rate, format='WAV')
-            audio_data_bytes = audio_buffer.getvalue()
-
-            audio_duration = len(audio_data_np) / sample_rate
-
-            return AudioSynthesizeResponse(
-                # 将 bytes 转换为十六进制字符串表示，以便在 JSON 中传输
-                audio_data=audio_data_bytes.hex(),
-                duration=audio_duration,
-                format="wav",
-                sample_rate=sample_rate
-            )
-        else:
-            logger.error("音频处理失败")
-            return AudioSynthesizeResponse(
-                audio_data="",
-                duration=0,
-                format="wav",
-                sample_rate=16000
-            )
+        # 合成语音
+        wavs = engine.infer([input_text], skip_refine_text=True)
+        if not wavs or len(wavs) == 0:
+            raise HTTPException(status_code=500, detail="语音合成失败")
+        
+        wav_np = wavs[0]
+        sr = 24000
+        
+        # 方法1：使用soundfile保存（推荐）
+        buf = io.BytesIO()
+        
+        # 确保音频数据是float32格式，并在[-1, 1]范围内
+        if wav_np.dtype != np.float32:
+            wav_np = wav_np.astype(np.float32)
+        
+        # 确保数值范围正确
+        if np.max(np.abs(wav_np)) > 1.0:
+            wav_np = wav_np / np.max(np.abs(wav_np))
+        
+        sf.write(buf, wav_np, sr, format='WAV', subtype='FLOAT')
+        audio_bytes = buf.getvalue()
+        
+        # 同时保存测试文件到磁盘
+        test_filename = f"/mnt/chattts_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
+        sf.write(test_filename, wav_np, sr, format='WAV', subtype='PCM_16')  # 使用PCM_16确保兼容性
+        
+        logger.info(f"测试文件已保存到: {test_filename}")
+        logger.info(f"音频数据形状: {wav_np.shape}, 采样率: {sr}, 时长: {len(wav_np)/sr:.2f}秒")
+        
+        # 计算音频时长
+        duration = len(wav_np) / sr
+        
+        return AudioSynthesizeResponse(
+            audio_data=audio_bytes.hex(),
+            duration=duration,
+            format="wav",
+            sample_rate=sr
+        )
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"语音合成失败: {str(e)}")
-
+        logger.exception(f"ChatTTS 合成失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"ChatTTS 合成失败: {str(e)}")
 @router.post("/audio/process", response_model=AudioProcessResponse)
 async def process_audio(file: UploadFile = File(...), 
                        target_rate: int = 16000,
@@ -1065,3 +1124,20 @@ async def root():
     根端点
     """
     return {"message": "儿童教育AI系统API服务", "version": "1.0.0"}
+
+# 在路由文件末尾添加测试代码（仅用于调试）
+if __name__ == "__main__":
+    # 测试 ChatTTS 加载
+    try:
+        engine = _get_chattts_engine()
+        print("ChatTTS 加载成功")
+        
+        # 测试合成
+        texts = engine.infer(["hello"], skip_refine_text=False)
+        wavs = engine.infer(texts, skip_refine_text=True)
+        print(f"合成成功，生成音频长度: {len(wavs[0])}")
+        
+    except Exception as e:
+        print(f"测试失败: {str(e)}")
+        import traceback
+        traceback.print_exc()

@@ -1,5 +1,6 @@
 import speech_recognition as sr
 from typing import BinaryIO, Optional, Any, Union
+from services.enhanced_audio_codec import EnhancedAudioCodecService
 import numpy as np
 from io import BytesIO
 import wave

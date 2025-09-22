@@ -51,8 +51,8 @@ export class ChatApiService {
         safetyData
       );
       
-      console.log('[Chat] 安全检查完成，安全状态:', response.is_safe);
-      return response;
+      console.log('[Chat] 安全检查完成，安全状态:', response.data.is_safe);
+      return response.data;
     } catch (error: any) {
       console.error('[Chat] 安全检查失败:', error.response?.data?.detail || error.message);
       throw new Error(error.response?.data?.detail || '安全检查失败');
@@ -70,7 +70,7 @@ export class ChatApiService {
       );
       
       console.log('[Chat] 教育问答响应成功');
-      return response;
+      return response.data;
     } catch (error: any) {
       console.error('[Chat] 教育问答失败:', error.response?.data?.detail || error.message);
       throw new Error(error.response?.data?.detail || '教育问答失败，请重试');
@@ -88,7 +88,7 @@ export class ChatApiService {
       );
       
       console.log('[Chat] 情感支持响应成功');
-      return response;
+      return response.data;
     } catch (error: any) {
       console.error('[Chat] 情感支持失败:', error.response?.data?.detail || error.message);
       throw new Error(error.response?.data?.detail || '情感支持失败，请重试');

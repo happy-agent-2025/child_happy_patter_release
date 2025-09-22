@@ -48,7 +48,6 @@ aiohttp==3.12.15
 # 数据处理
 jsonschema==4.25.0
 pydantic>=2.9.0,<3.0.0
-pydantic-core>=2.9.0,<3.0.0
 
 # 工具库
 python-dotenv==1.1.1

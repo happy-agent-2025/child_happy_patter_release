@@ -14,7 +14,7 @@ from services.fish_speech_service import FishSpeechService # 新增导入
 from services.processing import AudioProcessingService
 
 import io # 新增导入
-import soundfile as sf
+# import soundfile as sf  # 暂时注释
 
 # 配置日志
 logging.basicConfig(level=logging.WARNING)

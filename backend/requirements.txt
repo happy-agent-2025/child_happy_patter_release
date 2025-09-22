@@ -35,6 +35,7 @@ edge-tts==7.2.3
 gTTS==2.5.4
 pyttsx3==2.99
 ffmpeg-python==0.2.0
+torchaudio
 
 # 其他AI服务
 dashscope==1.24.2

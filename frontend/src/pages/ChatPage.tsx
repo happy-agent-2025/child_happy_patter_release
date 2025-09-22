@@ -251,6 +251,48 @@ const ChatPage: React.FC = () => {
       message.warning('消息内容不适宜，已被过滤');
     }
   };
+
+  // 在组件内部添加这个辅助函数
+  const extractChatResponse = (response: any): { content: string; agentType: string } => {
+    let content = '抱歉，我无法理解您的问题。';
+    let agentType = 'edu';
+    
+    try {
+      // 处理不同层级的响应结构
+      if (response?.data?.data?.response) {
+        // 新的嵌套结构: response.data.data.response
+        content = response.data.data.response;
+        agentType = response.data.data.agent_type || 'edu';
+      } else if (response?.data?.response) {
+        // 直接数据结构: response.data.response
+        content = response.data.response;
+        agentType = response.data.agent_type || 'edu';
+      } else if (response?.result?.filtered_content) {
+        // 安全检查代理返回格式
+        content = response.result.filtered_content;
+        agentType = response.agent || response.agent_type || 'safety';
+      } else if (response?.response) {
+        // 教育代理返回格式
+        content = response.response;
+        agentType = response.agent || response.agent_type || 'edu';
+      } else if (response?.answer) {
+        // 其他代理可能的返回格式
+        content = response.answer;
+        agentType = response.agent || response.agent_type || 'meta';
+      } else if (response?.message) {
+        // 错误消息格式
+        content = response.message;
+        agentType = 'meta';
+      } else if (typeof response === 'string') {
+        // 如果响应本身就是字符串
+        content = response;
+      }
+    } catch (error) {
+      console.error('解析响应时出错:', error);
+    }
+    
+    return { content, agentType };
+  };
   
   // 发送消息到API
   const sendMessageToAPI = async (messageContent: string) => {
@@ -271,28 +313,11 @@ const ChatPage: React.FC = () => {
         hasAgent: !!response.agent,
         responseKeys: Object.keys(response)
       });
-      
-      // 根据后端实际返回格式解析内容
-      let aiContent = '抱歉，我无法理解您的问题。';
-      if (response.result && response.result.filtered_content) {
-        // 安全检查代理返回格式
-        aiContent = response.result.filtered_content;
-      } else if (response.response) {
-        // 教育代理返回格式
-        aiContent = response.response;
-      } else if (response.answer) {
-        // 其他代理可能的返回格式
-        aiContent = response.answer;
-      } else if (response.message) {
-        // 错误消息格式
-        aiContent = response.message;
-      } else if (typeof response === 'string') {
-        // 如果响应本身就是字符串
-        aiContent = response;
-      } else {
-        // 尝试将响应转换为字符串
-        aiContent = JSON.stringify(response, null, 2);
-      }
+
+      // 然后在 sendMessageToAPI 函数中使用
+      const { content: aiContent, agentType } = extractChatResponse(response);
+      console.log('响应内容:', aiContent);
+      console.log('代理类型:', agentType);
       
       // 文本转语音播放
       try {
@@ -302,11 +327,9 @@ const ChatPage: React.FC = () => {
           speed: 1.0,
           volume: 1.0
         });
-
-        console.log('文本转语音成功，播放中...', ttsResponse);
         
-        if (ttsResponse.success && ttsResponse.data && ttsResponse.data.audio_data) {
-          await AudioApiService.playAudio(ttsResponse.data.audio_data, ttsResponse.data.format || 'wav');
+        if (ttsResponse.success && ttsResponse.data && ttsResponse.data.data.audio_data) {
+          await AudioApiService.playAudio(ttsResponse.data.data.audio_data, ttsResponse.data.format || 'wav');
         }
       } catch (ttsError) {
         console.warn('文本转语音失败:', ttsError);

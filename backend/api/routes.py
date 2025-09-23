@@ -8,8 +8,14 @@ import os
 import json
 import logging
 import numpy as np  
+import tempfile
+import whisper
+import librosa
+import io
+import opencc
+
 # ---------------- ChatTTS 源码版集成 ----------------
-import sys, os, io, torch, torchaudio
+import torch, torchaudio
 
 _CHATTS_SRC = os.path.abspath(
     os.path.join(
@@ -53,13 +59,34 @@ def _get_chattts_engine():
     
     return _CHAT_TTS_ENGINE
 # ---------------------------------------------------
+# ---------------- Whisper 集成 ----------------
+
+import tempfile
+import os
+import whisper
+from fastapi import HTTPException, UploadFile, File
+import logging
+# 首先初始化 logger 和 router
+router = APIRouter()
+logger = logging.getLogger(__name__)
+# 初始化 Whisper 模型
+try:
+    logger.info("正在加载 Whisper 模型...")
+    # 可以根据需要选择模型大小：tiny, base, small, medium, large
+    model = whisper.load_model("base")
+    logger.info("Whisper 模型加载成功")
+except Exception as e:
+    logger.error(f"Whisper 模型加载失败: {e}")
+    model = None
+
+# ---------------------------------------------------
 
 from services.stt_service import STTService
 from services.tts_service import TTSService
 from services.processing import AudioProcessingService
 
 import io # 新增导入
-# import soundfile as sf  # 暂时注释
+import soundfile as sf
 
 # 配置日志
 # 配置更详细的日志
@@ -846,6 +873,49 @@ async def synthesize_audio_with_chattts(request: AudioSynthesizeRequest):
     except Exception as e:
         logger.exception(f"ChatTTS 合成失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"ChatTTS 合成失败: {str(e)}")
+
+@router.post("/audio/transcribe/whisper")
+async def transcribe_audio_whisper(file: UploadFile = File(...), language: str = "zh"):
+    """
+    使用 Whisper 进行音频转录，并转换为简体中文
+    """
+    # 检查模型是否加载成功
+    if model is None:
+        raise HTTPException(status_code=500, detail="Whisper 模型未正确加载")
+    
+    try:
+        logger.info(f"开始 Whisper 转录，语言: {language}")
+        
+        # 使用临时文件方法
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_file_path = temp_file.name
+        
+        try:
+            # 加载音频文件
+            audio_array = whisper.load_audio(temp_file_path)
+            # 进行转录
+            result = model.transcribe(audio_array, language=language)
+            
+            # 将繁体中文转换为简体中文
+            converter = opencc.OpenCC('t2s')  # 去掉 .json 后缀
+            simplified_text = converter.convert(result["text"])
+            
+            logger.info("Whisper 转录成功")
+            return {
+                "text": simplified_text,
+                "language": result.get("language", language)
+            }
+            
+        finally:
+            # 清理临时文件
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+                
+    except Exception as e:
+        logger.error(f"Whisper 转录失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"转录失败: {str(e)}")
 @router.post("/audio/process", response_model=AudioProcessResponse)
 async def process_audio(file: UploadFile = File(...), 
                        target_rate: int = 16000,

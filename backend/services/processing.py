@@ -2,8 +2,11 @@ import numpy as np
 from typing import Tuple, Optional
 import warnings
 from scipy import signal
-warnings.filterwarnings('ignore', category=DeprecationWarning)
+import logging
+from core.exceptions import AudioProcessingError
 
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+logger = logging.getLogger(__name__)
 
 class AudioProcessingService:
     """
@@ -15,48 +18,42 @@ class AudioProcessingService:
         pass
     
     def normalize_audio(self, audio_data: np.ndarray, target_rms: float = 0.1) -> np.ndarray:
-        """
-        音频归一化处理
-        
-        Args:
-            audio_data: 音频数据数组
-            target_rms: 目标均方根值
+        """音频归一化处理"""
+        try:
+            if not isinstance(audio_data, np.ndarray):
+                raise AudioProcessingError("音频数据必须是numpy数组", "INVALID_AUDIO_DATA")
             
-        Returns:
-            归一化后的音频数据
-        """
-        # 计算当前音频的均方根值
-        current_rms = np.sqrt(np.mean(audio_data**2))
-        
-        if current_rms == 0:
-            return audio_data
+            if len(audio_data) == 0:
+                raise AudioProcessingError("音频数据为空", "EMPTY_AUDIO_DATA")
             
-        # 计算增益因子
-        gain = target_rms / current_rms
-        
-        # 应用增益
-        normalized_audio = audio_data * gain
-        
-        # 确保数值在合法范围内
-        normalized_audio = np.clip(normalized_audio, -1.0, 1.0)
-        
-        return normalized_audio
+            # 计算当前音频的均方根值
+            current_rms = np.sqrt(np.mean(audio_data**2))
+            
+            if current_rms == 0:
+                logger.warning("音频数据是静默的，无法归一化")
+                return audio_data
+                
+            # 计算增益因子
+            gain = target_rms / current_rms
+            
+            # 应用增益
+            normalized_audio = audio_data * gain
+            
+            # 确保数值在合法范围内
+            normalized_audio = np.clip(normalized_audio, -1.0, 1.0)
+            
+            return normalized_audio
+            
+        except AudioProcessingError:
+            raise
+        except Exception as e:
+            logger.error(f"音频归一化失败: {e}")
+            raise AudioProcessingError("音频归一化处理失败", "AUDIO_NORMALIZATION_FAILED")
     
     def remove_silence(self, audio_data: np.ndarray, sample_rate: int, 
                       silence_threshold: float = 0.01, 
                       min_silence_duration: float = 0.1) -> np.ndarray:
-        """
-        移除音频中的静音段（改进算法）
-        
-        Args:
-            audio_data: 音频数据数组
-            sample_rate: 采样率
-            silence_threshold: 静音阈值（0-1之间）
-            min_silence_duration: 最小静音持续时间（秒）
-            
-        Returns:
-            移除静音后的音频数据
-        """
+        """移除音频中的静音段"""
         # 计算最小静音样本数
         min_silence_samples = int(sample_rate * min_silence_duration)
         
@@ -101,52 +98,22 @@ class AudioProcessingService:
     
     def resample_audio(self, audio_data: np.ndarray, original_rate: int, 
                       target_rate: int) -> np.ndarray:
-        """
-        音频重采样（使用scipy高质量重采样算法）
-        
-        Args:
-            audio_data: 音频数据数组
-            original_rate: 原始采样率
-            target_rate: 目标采样率
-            
-        Returns:
-            重采样后的音频数据
-        """
+        """音频重采样"""
         if original_rate == target_rate:
             return audio_data
             
         # 使用scipy的高质量重采样算法
-        # 计算重采样系数
         resample_ratio = target_rate / original_rate
         
-        # 使用scipy.signal.resample进行高质量重采样
-        if resample_ratio > 1:
-            # 上采样
-            new_length = int(len(audio_data) * resample_ratio)
-            resampled = signal.resample(audio_data, new_length)
-        else:
-            # 下采样
-            new_length = int(len(audio_data) * resample_ratio)
-            resampled = signal.resample(audio_data, new_length)
+        new_length = int(len(audio_data) * resample_ratio)
+        resampled = signal.resample(audio_data, new_length)
             
         return resampled
     
     def preprocess_audio(self, audio_data: np.ndarray, original_rate: int,
                         target_rate: int = 16000, target_rms: float = 0.1,
                         silence_threshold: float = 0.01) -> np.ndarray:
-        """
-        完整的音频预处理流程
-        
-        Args:
-            audio_data: 音频数据数组
-            original_rate: 原始采样率
-            target_rate: 目标采样率
-            target_rms: 目标均方根值
-            silence_threshold: 静音阈值
-            
-        Returns:
-            预处理后的音频数据
-        """
+        """完整的音频预处理流程"""
         # 1. 移除静音
         audio_data = self.remove_silence(audio_data, original_rate, silence_threshold)
         

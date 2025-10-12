@@ -15,18 +15,23 @@ PyJWT==2.8.0
 bcrypt==4.3.0
 
 # AI和ML相关
+opencc
 openai==1.99.9
 langgraph==0.2.0
 langchain==0.2.0
 langchain-community==0.2.0
+langchain-core>=0.2.27,<0.3.0
+langchain-openai>=0.1.0,<0.2.0
 transformers==4.46.0
 torch==2.6.0
 numpy==1.26.4
 pandas==2.1.4
 scikit-learn==1.5.2
 scipy==1.13.1
+mem0ai>=0.1.0
 
 # 音频处理
+openai-whisper
 librosa==0.11.0
 soundfile==0.13.1
 pydub==0.25.1
@@ -50,6 +55,7 @@ aiohttp==3.12.15
 # 数据处理
 jsonschema==4.25.0
 pydantic>=2.9.0,<3.0.0
+pydantic-settings==2.11.0
 
 # 工具库
 python-dotenv==1.1.1
@@ -57,6 +63,7 @@ click==8.1.8
 tqdm==4.67.0
 loguru>=0.7.0
 tenacity>=8.0.0
+aiofiles>=24.1.0
 
 # 测试
 pytest==8.4.1

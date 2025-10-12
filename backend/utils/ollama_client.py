@@ -107,28 +107,28 @@ class OllamaClient:
         if model is None:
             model = self.default_model
             
-        # 构建prompt - 支持qwen2.5的模板格式
+        # 构建prompt - 使用简单的对话格式
         prompt = ""
         system_message = None
         user_messages = []
-        
+
         for message in messages:
             if message.get('role') == 'system':
                 system_message = message.get('content', '')
             elif message.get('role') == 'user':
                 user_messages.append(message.get('content', ''))
             elif message.get('role') == 'assistant':
-                user_messages.append(f"Assistant: {message.get('content', '')}")
-        
-        # 使用qwen2.5的模板格式
+                user_messages.append(message.get('content', ''))
+
+        # 使用简单的对话格式
         if system_message:
-            prompt = f"<|im_start|>system\n{system_message}<|im_end|>\n"
-        
+            prompt += f"System: {system_message}\n\n"
+
         for i, content in enumerate(user_messages):
-            if not content.startswith('Assistant:'):
-                prompt += f"<|im_start|>user\n{content}<|im_end|>\n<|im_start|>assistant\n"
-            else:
-                prompt += f"{content}<|im_end|>\n"
+            if i % 2 == 0:  # 用户消息
+                prompt += f"User: {content}\n\nAssistant: "
+            else:  # 助手消息
+                prompt += f"{content}\n\n"
         
         # 构建请求数据
         data = {

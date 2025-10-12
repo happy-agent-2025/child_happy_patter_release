@@ -1,0 +1,195 @@
+{
+  "test_summary": {
+    "total_tests": 20,
+    "passed_tests": 19,
+    "success_rate": 95.0,
+    "test_timestamp": "2025-10-12T10:20:55.188596"
+  },
+  "test_types": {
+    "intent_recognition": {
+      "total": 4,
+      "passed": 4
+    },
+    "simple_chat": {
+      "total": 6,
+      "passed": 6
+    },
+    "story_world_creation": {
+      "total": 3,
+      "passed": 3
+    },
+    "story_role_interaction": {
+      "total": 2,
+      "passed": 2
+    },
+    "conversation_flow": {
+      "total": 5,
+      "passed": 4
+    }
+  },
+  "detailed_results": [
+    {
+      "test_type": "intent_recognition",
+      "input": "你好，我想听个故事",
+      "expected": "story",
+      "actual": "story",
+      "confidence": 0.8999999999999999,
+      "success": true
+    },
+    {
+      "test_type": "intent_recognition",
+      "input": "今天天气怎么样？",
+      "expected": "chat",
+      "actual": "chat",
+      "confidence": 0.75,
+      "success": true
+    },
+    {
+      "test_type": "intent_recognition",
+      "input": "我想扮演一个勇敢的小骑士",
+      "expected": "story",
+      "actual": "story",
+      "confidence": 0.75,
+      "success": true
+    },
+    {
+      "test_type": "intent_recognition",
+      "input": "为什么天空是蓝色的？",
+      "expected": "chat",
+      "actual": "chat",
+      "confidence": 0.75,
+      "success": true
+    },
+    {
+      "test_type": "simple_chat",
+      "scenario": "情感支持对话",
+      "message": "你好贝贝！",
+      "response_length": 28,
+      "safety_check": true,
+      "emotion_detected": "友好",
+      "success": true
+    },
+    {
+      "test_type": "simple_chat",
+      "scenario": "情感支持对话",
+      "message": "我今天有点不开心",
+      "response_length": 41,
+      "safety_check": true,
+      "emotion_detected": "开心",
+      "success": true
+    },
+    {
+      "test_type": "simple_chat",
+      "scenario": "情感支持对话",
+      "message": "你能给我讲个笑话吗？",
+      "response_length": 40,
+      "safety_check": true,
+      "emotion_detected": "开心",
+      "success": true
+    },
+    {
+      "test_type": "simple_chat",
+      "scenario": "教育问答对话",
+      "message": "1+1等于几？",
+      "response_length": 19,
+      "safety_check": true,
+      "emotion_detected": "中性",
+      "success": true
+    },
+    {
+      "test_type": "simple_chat",
+      "scenario": "教育问答对话",
+      "message": "那2+2呢？",
+      "response_length": 15,
+      "safety_check": true,
+      "emotion_detected": "中性",
+      "success": true
+    },
+    {
+      "test_type": "simple_chat",
+      "scenario": "教育问答对话",
+      "message": "谢谢你的帮助！",
+      "response_length": 22,
+      "safety_check": true,
+      "emotion_detected": "友好",
+      "success": true
+    },
+    {
+      "test_type": "story_world_creation",
+      "request": "我想创建一个魔法森林世界",
+      "world_name": "魔法森林世界",
+      "success": true
+    },
+    {
+      "test_type": "story_world_creation",
+      "request": "帮我设计一个太空冒险的故事背景",
+      "world_name": "星际冒险世界",
+      "success": true
+    },
+    {
+      "test_type": "story_world_creation",
+      "request": "我想要一个海底王国的世界",
+      "world_name": "海底王国",
+      "success": true
+    },
+    {
+      "test_type": "story_role_interaction",
+      "world": "魔法森林世界",
+      "role": "勇敢的小骑士",
+      "messages_count": 3,
+      "success": true
+    },
+    {
+      "test_type": "story_role_interaction",
+      "world": "魔法森林世界",
+      "role": "聪明的魔法师",
+      "messages_count": 3,
+      "success": true
+    },
+    {
+      "test_type": "conversation_flow",
+      "step": 1,
+      "user_input": "你好贝贝！",
+      "expected_mode": "chat",
+      "actual_mode": "chat",
+      "continuity_score": 0.8,
+      "success": true
+    },
+    {
+      "test_type": "conversation_flow",
+      "step": 2,
+      "user_input": "我想听个关于太空的故事",
+      "expected_mode": "story",
+      "actual_mode": "story",
+      "continuity_score": 0.8,
+      "success": true
+    },
+    {
+      "test_type": "conversation_flow",
+      "step": 3,
+      "user_input": "我想要一个勇敢的宇航员角色",
+      "expected_mode": "story",
+      "actual_mode": "story",
+      "continuity_score": 0.8,
+      "success": true
+    },
+    {
+      "test_type": "conversation_flow",
+      "step": 4,
+      "user_input": "你好宇航员，我们一起探索这个星球吧！",
+      "expected_mode": "story",
+      "actual_mode": "chat",
+      "continuity_score": 0.3,
+      "success": false
+    },
+    {
+      "test_type": "conversation_flow",
+      "step": 5,
+      "user_input": "今天玩得很开心，谢谢贝贝！",
+      "expected_mode": "chat",
+      "actual_mode": "chat",
+      "continuity_score": 0.8,
+      "success": true
+    }
+  ]
+}

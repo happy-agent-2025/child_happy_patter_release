@@ -20,7 +20,7 @@ export const API_ENDPOINTS = {
   
   // 聊天相关
   CHAT: {
-    SEND: '/langgraph/chat',
+    SEND: '/story/create',
     SAFETY_CHECK: '/safety/check',
     EDU_ASK: '/edu/ask',
     EMOTION_SUPPORT: '/emotion/support',
@@ -83,7 +83,7 @@ export const API_ENDPOINTS = {
 // 创建axios实例
 const createApiInstance = (): AxiosInstance => {
   const instance = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
+    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001',
     timeout: 30000,
     headers: {
       'Content-Type': 'application/json',

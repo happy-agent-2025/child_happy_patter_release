@@ -37,9 +37,9 @@ class OpenAIClient:
         self._initialized = True
     
     def chat_completion(
-        self, 
-        messages: List[Dict[str, str]], 
-        model: str = "deepseek-chat",
+        self,
+        messages: List[Dict[str, str]],
+        model: str = "qwen-turbo",
         temperature: float = 0.7,
         max_tokens: Optional[int] = None
     ) -> str:

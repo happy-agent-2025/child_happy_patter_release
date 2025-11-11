@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { message } from 'antd';
 import { ChatApiService } from '../services/chatApi';
+import { StoryApiService } from '../services/storyApi';
 
 export interface Message {
   id: number;
@@ -8,7 +9,7 @@ export interface Message {
   sender: 'user' | 'assistant';
   timestamp: Date;
   isAudio?: boolean;
-  agentType?: 'meta' | 'safety' | 'edu' | 'emotion' | 'memory';
+  agentType?: 'meta' | 'safety' | 'edu' | 'emotion' | 'memory' | 'story';
 }
 
 export interface UseChatReturn {
@@ -80,7 +81,7 @@ export const useChat = (): UseChatReturn => {
     try {
       console.log('发送消息:', content);
       
-      const response = await ChatApiService.intelligentChat(content, 1);
+      const response = await StoryApiService.intelligentStory(content, '1');
       
       // 统一响应格式处理
       let aiContent = '抱歉，我无法理解您的问题。';
@@ -88,11 +89,11 @@ export const useChat = (): UseChatReturn => {
       
       if (response.success && response.data) {
         const data = response.data;
-        aiContent = data.content || data.response || data.answer || data.message || aiContent;
-        agentType = data.agent_type || data.agent || 'edu';
-      } else if (response.content) {
-        aiContent = response.content;
-        agentType = response.agent_type || 'edu';
+        aiContent = data.response || data.content || data.answer || data.message || aiContent;
+        agentType = 'story';
+      } else if (response.response) {
+        aiContent = response.response;
+        agentType = 'story';
       }
       
       const aiMessage: Message = {

@@ -10,7 +10,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from agents.langgraph_workflow import happy_partner_graph
+from agents.multi_agent import multi_agent
 from db.database import get_db
 from db.database_service import DatabaseService
 from schemas import (
@@ -28,20 +28,20 @@ async def langgraph_chat(
     db: Session = Depends(get_db)
 ):
     """
-    LangGraph驱动的智能聊天接口
+    多代理系统驱动的智能聊天接口
 
     - **user_id**: 用户ID，默认为1
     - **session_id**: 可选的会话ID
     - **content**: 用户输入的聊天内容
     - **context**: 额外的上下文信息，可选
 
-    返回LangGraph工作流处理结果，包含智能路由和协作代理的响应
+    返回多代理系统处理结果，包含智能路由和协作代理的响应
     """
     try:
-        # 执行LangGraph工作流
-        result = await happy_partner_graph.process_message(
+        # 执行多代理系统
+        result = await multi_agent.process_message(
+            user_message=request.content,
             user_id=str(request.user_id or 1),
-            content=request.content,
             session_id=request.session_id
         )
 
@@ -50,18 +50,25 @@ async def langgraph_chat(
             db=db,
             user_id=request.user_id or 1,
             session_id=request.session_id,
-            agent_type=result["metadata"].get("agent", "unknown"),
+            agent_type=result.get("mode", "unknown"),
             user_input=request.content,
             agent_response=json.dumps(result, ensure_ascii=False)
         )
 
         # 构建响应
         response = ChatResponse(
-            response=result["response"],
-            agent_type=result["metadata"].get("agent", "unknown"),
+            response=result.get("response", ""),
+            agent_type=result.get("mode", "unknown"),
             session_id=request.session_id,
             timestamp=datetime.now(),
-            metadata=result["metadata"]
+            metadata={
+                "intent": result.get("intent"),
+                "safety_check": result.get("safety_check"),
+                "emotion_analysis": result.get("emotion_analysis"),
+                "world_context": result.get("world_context"),
+                "role_context": result.get("role_context"),
+                "voice_metadata": result.get("voice_metadata")
+            }
         )
 
         return response
@@ -77,16 +84,16 @@ async def langgraph_chat_stream(
     db: Session = Depends(get_db)
 ):
     """
-    LangGraph流式聊天接口（实验性）
+    多代理系统流式聊天接口（实验性）
 
     提供实时的agent处理状态更新
     """
     try:
         # 这里可以实现流式响应
         # 目前返回完整结果作为演示
-        result = await happy_partner_graph.process_message(
+        result = await multi_agent.process_message(
+            user_message=request.content,
             user_id=str(request.user_id or 1),
-            content=request.content,
             session_id=request.session_id
         )
 
@@ -97,7 +104,7 @@ async def langgraph_chat_stream(
         }
 
     except Exception as e:
-        logger.error(f"LangGraph流式聊天失败: {str(e)}")
+        logger.error(f"多代理系统流式聊天失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"流式聊天失败: {str(e)}")
 
 
@@ -109,36 +116,49 @@ async def get_workflow_state(
     """
     获取工作流状态信息
 
-    返回当前LangGraph工作流的配置和状态
+    返回当前LangGraph多代理系统的配置和状态
     """
     try:
         # 获取图的结构信息
         graph_structure = {
-            "nodes": list(happy_partner_graph.compiled_graph.nodes.keys()),
+            "nodes": list(multi_agent.graph.nodes.keys()),
             "edges": [],
-            "entry_point": "input_processing",
+            "entry_point": "input_processor",
             "end_point": "END"
         }
 
-        # 构建边信息
-        for edge in happy_partner_graph.compiled_graph.edges:
-            if hasattr(edge, 'source') and hasattr(edge, 'target'):
-                graph_structure["edges"].append({
-                    "source": edge.source,
-                    "target": edge.target
-                })
+        # 构建边信息（简化版）
+        graph_structure["edges"] = [
+            {"source": "input_processor", "target": "intent_router"},
+            {"source": "intent_router", "target": "safety_checker"},
+            {"source": "intent_router", "target": "chat_handler"},
+            {"source": "intent_router", "target": "story_world_builder"},
+            {"source": "safety_checker", "target": "emotion_analyzer"},
+            {"source": "safety_checker", "target": "response_formatter"},
+            {"source": "emotion_analyzer", "target": "chat_handler"},
+            {"source": "emotion_analyzer", "target": "story_world_builder"},
+            {"source": "chat_handler", "target": "memory_updater"},
+            {"source": "story_world_builder", "target": "story_role_manager"},
+            {"source": "story_role_manager", "target": "story_interactive"},
+            {"source": "story_interactive", "target": "memory_updater"},
+            {"source": "memory_updater", "target": "response_formatter"},
+            {"source": "response_formatter", "target": "voice_output_processor"},
+            {"source": "response_formatter", "target": "END"},
+            {"source": "voice_output_processor", "target": "END"}
+        ]
 
         return {
             "workflow_info": {
-                "name": "Happy Partner Multi-Agent Workflow",
-                "version": "1.0.0",
+                "name": "Happy Partner Multi-Agent System",
+                "version": "2.0.0",
                 "description": "基于LangGraph的儿童教育AI多代理系统"
             },
             "graph_structure": graph_structure,
             "current_session": {
                 "user_id": user_id,
                 "session_id": session_id
-            }
+            },
+            "system_stats": multi_agent.get_system_statistics()
         }
 
     except Exception as e:
@@ -355,26 +375,26 @@ async def get_user_insights(
 @router.post("/test/workflow")
 async def test_workflow():
     """
-    测试LangGraph工作流（仅用于开发调试）
+    测试多代理系统（仅用于开发调试）
     """
     try:
         # 简单的测试用例
-        test_result = await happy_partner_graph.process_message(
+        test_result = await multi_agent.process_message(
+            user_message="你好，我想听个故事",
             user_id="test_user",
-            content="1+1等于多少？",
             session_id="test_session"
         )
 
         return {
             "test_status": "success",
             "workflow_result": test_result,
-            "message": "LangGraph工作流测试完成"
+            "message": "LangGraph多代理系统测试完成"
         }
 
     except Exception as e:
-        logger.error(f"工作流测试失败: {str(e)}")
+        logger.error(f"多代理系统测试失败: {str(e)}")
         return {
             "test_status": "failed",
             "error": str(e),
-            "message": "LangGraph工作流测试失败"
+            "message": "LangGraph多代理系统测试失败"
         }

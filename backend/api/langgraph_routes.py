@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 from agents.multi_agent import multi_agent
 from db.database import get_db
 from db.database_service import DatabaseService
+from models.user import Conversation
 from schemas import (
     ChatRequest, ChatResponse,
     SessionCreateRequest, SessionResponse,
@@ -59,9 +60,9 @@ async def langgraph_chat(
         response = ChatResponse(
             response=result.get("response", ""),
             agent_type=result.get("mode", "unknown"),
-            session_id=request.session_id,
+            session_id=request.session_id, # type: ignore
             timestamp=datetime.now(),
-            metadata={
+            metadata={ # type: ignore
                 "intent": result.get("intent"),
                 "safety_check": result.get("safety_check"),
                 "emotion_analysis": result.get("emotion_analysis"),
@@ -94,7 +95,7 @@ async def langgraph_chat_stream(
         result = await multi_agent.process_message(
             user_message=request.content,
             user_id=str(request.user_id or 1),
-            session_id=request.session_id
+            session_id=request.session_id # type: ignore
         )
 
         return {
@@ -158,7 +159,7 @@ async def get_workflow_state(
                 "user_id": user_id,
                 "session_id": session_id
             },
-            "system_stats": multi_agent.get_system_statistics()
+            "system_stats": await multi_agent.get_system_statistics()
         }
 
     except Exception as e:
@@ -168,25 +169,25 @@ async def get_workflow_state(
 
 @router.get("/analytics/conversation-flow")
 async def get_conversation_flow_analytics(
-    user_id: int,
-    days: int = Query(7, ge=1, le=30),
+    user_id: int = Query(..., description="用户ID"),
+    days: int = Query(7, ge=1, le=365, description="分析天数"),
     db: Session = Depends(get_db)
 ):
     """
-    获取对话流分析数据
-
+    获取用户对话流分析
+    
     - **user_id**: 用户ID
-    - **days**: 分析天数，1-30天
+    - **days**: 分析天数，默认7天
     """
     try:
         # 获取用户对话数据
         from datetime import timedelta
         cutoff_date = datetime.now() - timedelta(days=days)
 
-        conversations = db.query(DatabaseService.Conversation).filter(
-            DatabaseService.Conversation.user_id == user_id,
-            DatabaseService.Conversation.created_at >= cutoff_date
-        ).order_by(DatabaseService.Conversation.created_at).all()
+        conversations = db.query(Conversation).filter(
+            Conversation.user_id == user_id,
+            Conversation.created_at >= cutoff_date
+        ).order_by(Conversation.created_at).all()
 
         # 分析agent使用模式
         agent_flow = []
@@ -252,10 +253,11 @@ async def create_langgraph_session(
         )
 
         return SessionResponse(
-            session_id=session.id,
+            id=session.id,
             user_id=session.user_id,
             title=session.title,
             created_at=session.created_at,
+            updated_at=session.updated_at,
             is_active=bool(session.is_active)
         )
 
@@ -279,7 +281,7 @@ async def get_session_history(
     try:
         # 验证会话存在
         session = DatabaseService.get_session_by_id(db, session_id)
-        if not session or session.is_active == 0:
+        if not session or not bool(session.is_active):
             raise HTTPException(status_code=404, detail="会话不存在或已停用")
 
         # 获取对话记录
@@ -327,8 +329,8 @@ async def get_user_insights(
     """
     try:
         # 获取用户所有对话
-        conversations = db.query(DatabaseService.Conversation).filter(
-            DatabaseService.Conversation.user_id == user_id
+        conversations = db.query(Conversation).filter(
+            Conversation.user_id == user_id
         ).all()
 
         # 分析模式

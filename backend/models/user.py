@@ -27,13 +27,15 @@ class Session(Base):
 
 class Conversation(Base):
     __tablename__ = "conversations"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, index=True)
     session_id = Column(Integer, ForeignKey("sessions.id"), index=True, nullable=True)
     # 使用JSON类型存储对话历史
     conversation_history = Column(JSON, default=list)
     agent_type = Column(String)
+    user_input = Column(Text)
+    agent_response = Column(Text)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 

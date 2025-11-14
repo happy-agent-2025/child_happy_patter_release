@@ -1,7 +1,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import Dict, Any, Optional, List
+from typing import Optional
 from datetime import datetime
 import json
 import logging
@@ -16,8 +16,7 @@ from db.database_service import DatabaseService
 from models.user import Conversation
 from schemas import (
     ChatRequest, ChatResponse,
-    SessionCreateRequest, SessionResponse,
-    ConversationHistoryResponse
+    SessionCreateRequest, SessionResponse
 )
 
 router = APIRouter(prefix="/langgraph", tags=["LangGraph"])
@@ -43,7 +42,7 @@ async def langgraph_chat(
         result = await multi_agent.process_message(
             user_message=request.content,
             user_id=str(request.user_id or 1),
-            session_id=request.session_id
+            session_id=str(request.session_id) if request.session_id is not None else None
         )
 
         # 存储到数据库
@@ -81,8 +80,7 @@ async def langgraph_chat(
 
 @router.post("/chat/stream")
 async def langgraph_chat_stream(
-    request: ChatRequest,
-    db: Session = Depends(get_db)
+    request: ChatRequest
 ):
     """
     多代理系统流式聊天接口（实验性）
@@ -95,7 +93,7 @@ async def langgraph_chat_stream(
         result = await multi_agent.process_message(
             user_message=request.content,
             user_id=str(request.user_id or 1),
-            session_id=request.session_id # type: ignore
+            session_id=str(request.session_id) if request.session_id is not None else None
         )
 
         return {
@@ -249,15 +247,15 @@ async def create_langgraph_session(
         session = DatabaseService.create_session(
             db=db,
             user_id=request.user_id,
-            title=request.title
+            title=request.title or "新会话"
         )
 
         return SessionResponse(
-            id=session.id,
-            user_id=session.user_id,
-            title=session.title,
-            created_at=session.created_at,
-            updated_at=session.updated_at,
+            id=session.id,  # type: ignore
+            user_id=session.user_id,  # type: ignore
+            title=session.title,  # type: ignore
+            created_at=session.created_at,  # type: ignore
+            updated_at=session.updated_at,  # type: ignore
             is_active=bool(session.is_active)
         )
 
@@ -285,7 +283,11 @@ async def get_session_history(
             raise HTTPException(status_code=404, detail="会话不存在或已停用")
 
         # 获取对话记录
-        conversations = DatabaseService.get_conversations_by_session(db, session_id, limit)
+        conversations = DatabaseService.get_conversations_by_session(db, session_id)
+
+        # 手动应用限制
+        if len(conversations) > limit:
+            conversations = conversations[:limit]
 
         history = []
         for conv in conversations:

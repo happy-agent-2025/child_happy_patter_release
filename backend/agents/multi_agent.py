@@ -804,7 +804,7 @@ class MultiAgent:
             }
 
             # 执行状态图
-            result = await self.graph.ainvoke(initial_state)
+            result = await self.graph.ainvoke(initial_state) # type: ignore
 
             # 提取最终回应
             final_response = None

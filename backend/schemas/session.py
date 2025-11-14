@@ -8,6 +8,7 @@ from datetime import datetime
 
 class SessionCreateRequest(BaseModel):
     """创建会话请求模型"""
+    user_id: int
     title: Optional[str] = None
 
 

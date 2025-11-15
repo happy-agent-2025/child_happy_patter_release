@@ -11,9 +11,7 @@
 
 from typing import Dict, Any, List, Optional, TypedDict, Annotated
 from enum import Enum
-import json
 import uuid
-import asyncio
 import logging
 from datetime import datetime
 from dataclasses import dataclass, field
@@ -24,7 +22,6 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from agents.intent_agent import intent_agent, IntentType
 from agents.world_agent import world_agent
 from agents.role_factory import role_factory
-from agents.role_agent import RoleAgent, TypesOfRole
 from agents.safety_agent import SafetyAgent
 from agents.emotion_agent import EmotionAgent
 from memory.mem0 import story_memory_manager, MemoryType
@@ -126,7 +123,7 @@ class MultiAgent:
         else:
             logger.info("语音服务未启用，将使用文本模式")
 
-    def _build_graph(self) -> StateGraph:
+    def _build_graph(self) -> StateGraph:  # type: ignore
         """构建状态图"""
         # 创建状态图
         workflow = StateGraph(GraphState)
@@ -210,7 +207,7 @@ class MultiAgent:
         workflow.add_edge("input_processor", "intent_router")
 
         # 编译图
-        return workflow.compile()
+        return workflow.compile()  # type: ignore
 
     async def input_processor_node(self, state: GraphState) -> GraphState:
         """输入处理器节点 - 处理不同类型的输入"""
@@ -279,7 +276,10 @@ class MultiAgent:
 
                     # 更新语音元数据
                     updated_voice_metadata = state.get("voice_metadata", {})
-                    updated_voice_metadata.update(voice_output_metadata)
+                    if updated_voice_metadata:
+                        updated_voice_metadata.update(voice_output_metadata)
+                    else:
+                        updated_voice_metadata = voice_output_metadata
 
                     state.update({
                         "voice_metadata": updated_voice_metadata,
@@ -296,7 +296,10 @@ class MultiAgent:
                     }
 
                     updated_voice_metadata = state.get("voice_metadata", {})
-                    updated_voice_metadata.update(voice_output_metadata)
+                    if updated_voice_metadata:
+                        updated_voice_metadata.update(voice_output_metadata)
+                    else:
+                        updated_voice_metadata = voice_output_metadata
 
                     state.update({
                         "voice_metadata": updated_voice_metadata,
@@ -310,12 +313,20 @@ class MultiAgent:
 
             # 更新元数据记录错误
             updated_voice_metadata = state.get("voice_metadata", {})
-            updated_voice_metadata.update({
-                "output_type": "text",
-                "processing_attempted": True,
-                "error": str(e),
-                "timestamp": datetime.now().isoformat()
-            })
+            if updated_voice_metadata:
+                updated_voice_metadata.update({
+                    "output_type": "text",
+                    "processing_attempted": True,
+                    "error": str(e),
+                    "timestamp": datetime.now().isoformat()
+                })
+            else:
+                updated_voice_metadata = {
+                    "output_type": "text",
+                    "processing_attempted": True,
+                    "error": str(e),
+                    "timestamp": datetime.now().isoformat()
+                }
 
             state.update({
                 "voice_metadata": updated_voice_metadata,
@@ -331,19 +342,20 @@ class MultiAgent:
 
             # 使用意图识别智能体
             intent_result = intent_agent.detect_intent(
-                user_message, user_id, state["session_id"]
+                str(user_message), user_id, state["session_id"]
             )
 
             # 确定交互模式
-            if intent_result["intent"] == IntentType.STORY:
+            intent_value = intent_result.get("intent", IntentType.CHAT)
+            if intent_value == IntentType.STORY:
                 current_mode = InteractionMode.STORY
                 next_agent = "safety_checker"
-            elif intent_result["intent"] == IntentType.CHAT:
+            elif intent_value == IntentType.CHAT:
                 current_mode = InteractionMode.CHAT
                 next_agent = "safety_checker"
             else:  # 其他情况都默认为聊天模式
                 # 语音命令现在根据内容路由到相应的模式
-                if any(keyword in user_message.lower() for keyword in ["故事", "创建", "角色", "扮演"]):
+                if any(keyword in str(user_message).lower() for keyword in ["故事", "创建", "角色", "扮演"]):
                     current_mode = InteractionMode.STORY
                 else:
                     current_mode = InteractionMode.CHAT
@@ -352,14 +364,14 @@ class MultiAgent:
             # 更新状态
             state.update(
                 {
-                    "intent_result": intent_result,
+                    "intent_result": dict(intent_result),
                     "current_mode": current_mode,
                     "next_agent": next_agent,
                 }
             )
 
             logger.info(
-                f"意图识别结果: {intent_result['intent']}, 模式: {current_mode}"
+                f"意图识别结果: {intent_result.get('intent', 'unknown')}, 模式: {current_mode}"
             )
             return state
 
@@ -368,7 +380,7 @@ class MultiAgent:
             state.update(
                 {
                     "intent_result": {
-                        "intent": IntentType.CHAT,
+                        "intent": IntentType.CHAT.value,
                         "confidence": 0.5,
                     },
                     "current_mode": InteractionMode.CHAT,
@@ -383,7 +395,7 @@ class MultiAgent:
             user_message = state["messages"][-1].content
 
             # 执行安全检查
-            safety_result = self.safety_agent.filter_content(user_message)
+            safety_result = self.safety_agent.filter_content(str(user_message))
 
             state.update(
                 {
@@ -418,8 +430,7 @@ class MultiAgent:
             user_id = state["user_id"]
 
             # 执行情感分析
-            emotion_request = {"content": user_message, "user_id": user_id}
-            emotion_result = self.emotion_agent.analyze_emotion(emotion_request)
+            emotion_result = self.emotion_agent.analyze_emotion(str(user_message))
 
             state.update(
                 {
@@ -449,7 +460,7 @@ class MultiAgent:
 
             # 获取相关记忆
             relevant_memories = story_memory_manager.search_relevant_memories(
-                query=user_message,
+                query=str(user_message),
                 user_id=user_id,
                 memory_types=[
                     MemoryType.INTERACTION_HISTORY,
@@ -493,11 +504,11 @@ class MultiAgent:
             # 检查是否已有故事会话
             if session_id not in self.active_story_sessions:
                 # 创建新的故事世界
-                world_result = world_agent.create_world(user_message, user_id)
+                world_result = world_agent.create_world(str(user_message), user_id)
 
-                if world_result["success"]:
+                if world_result["success"] and world_result.get("world"):
                     world_data = world_result["world"]
-                    world_id = world_data["world_id"]
+                    world_id = world_data.get("world_id", f"world_{uuid.uuid4().hex[:8]}") if world_data else f"world_{uuid.uuid4().hex[:8]}"
 
                     # 创建故事会话
                     story_session = StorySession(
@@ -507,7 +518,7 @@ class MultiAgent:
 
                     # 存储世界观记忆
                     story_memory_manager.store_world_memory(
-                        world_data, user_id, session_id
+                        world_data, user_id, session_id  # type: ignore
                     )
 
                     # 为世界创建默认角色
@@ -516,12 +527,12 @@ class MultiAgent:
 
                     state.update(
                         {
-                            "world_context": world_data,
+                            "world_context": world_data,  # type: ignore
                             "next_agent": "story_role_manager",
                         }
                     )
 
-                    logger.info(f"创建故事世界: {world_data['world_name']}")
+                    logger.info(f"创建故事世界: {world_data.get('world_name', '未知世界')}")  # type: ignore
                 else:
                     # 世界创建失败，返回错误
                     state["messages"].append(
@@ -592,7 +603,7 @@ class MultiAgent:
             story_session = self.active_story_sessions.get(session_id)
             role_context = state.get("role_context", {})
 
-            if not story_session or not role_context.get("active_roles"):
+            if not story_session or not role_context or not role_context.get("active_roles"):
                 # 没有活跃角色，提供故事引导
                 response_content = "欢迎来到故事世界！你想让哪个角色和你一起冒险呢？"
             else:
@@ -606,7 +617,7 @@ class MultiAgent:
                 if role_agent_instance:
                     # 使用角色智能体生成回应
                     response = await role_agent_instance.respond_to_message(
-                        user_message, user_id, session_id
+                        str(user_message), user_id, session_id
                     )
 
                     if response["success"]:
@@ -687,7 +698,7 @@ class MultiAgent:
         try:
             # 如果内容不安全，提供安全回应
             safety_check = state.get("safety_check", {})
-            if not safety_check.get("is_safe", True):
+            if safety_check and not safety_check.get("is_safe", True):
                 safe_response = "抱歉，我无法回应这个内容。让我们聊点别的有趣的话题吧！"
                 if state["messages"] and isinstance(
                     state["messages"][-1], HumanMessage

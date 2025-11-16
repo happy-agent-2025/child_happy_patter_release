@@ -24,17 +24,12 @@ from agents.world_agent import world_agent
 from agents.role_factory import role_factory
 from agents.safety_agent import SafetyAgent
 from agents.emotion_agent import EmotionAgent
-from memory.mem0 import story_memory_manager, MemoryType
-from utils.openai_client import openai_client
+from core.memory.mem0 import story_memory_manager, MemoryType
+from core.openai_client import openai_client
 # 语音服务引用（保留接口）
-try:
-    from services.stt_service import STTService
-    from services.tts_service import TTSService
-    STT_AVAILABLE = True
-except ImportError:
-    STTService = None
-    TTSService = None
-    STT_AVAILABLE = False
+STTService = None
+TTSService = None
+STT_AVAILABLE = False
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)

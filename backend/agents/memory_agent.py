@@ -1,5 +1,5 @@
 from typing import Dict, Any, List
-from utils.openai_client import openai_client
+from core.openai_client import openai_client
 
 
 class MemoryAgent:

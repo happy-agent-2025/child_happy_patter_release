@@ -63,3 +63,4 @@ packaging==24.2
 setuptools==78.1.1
 wheel==0.45.1
 scalar_fastapi==1.4.3
+uvicorn[standard]

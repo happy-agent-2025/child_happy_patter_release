@@ -1,6 +1,6 @@
 from typing import Dict, Any, List
-from utils.openai_client import openai_client
-from utils.ollama_client import ollama_client
+from core.openai_client import openai_client
+from core.ollama_client import ollama_client
 from config.settings import settings
 
 

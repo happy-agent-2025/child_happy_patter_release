@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, LargeBinary, ForeignKe
 from datetime import datetime, timezone
 import json
 import numpy as np
-from db.database import Base
+from utils.db.database import Base
 
 
 class Voiceprint(Base):

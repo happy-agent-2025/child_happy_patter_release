@@ -12,7 +12,7 @@ import re
 from datetime import datetime
 from dataclasses import dataclass
 
-from utils.openai_client import openai_client
+from core.openai_client import openai_client
 from agents.safety_agent import SafetyAgent
 
 

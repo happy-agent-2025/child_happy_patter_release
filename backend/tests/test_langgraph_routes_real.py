@@ -20,8 +20,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 导入应用和数据库
 from main import app
-from db.database import Base, get_db
-from db.database_service import DatabaseService
+from utils.db.database import Base, get_db
+from utils.db.database_service import DatabaseService
 from models.user import User, Session, Conversation
 from schemas.chat import ChatRequest
 from schemas.session import SessionCreateRequest

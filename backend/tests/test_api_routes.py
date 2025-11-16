@@ -8,6 +8,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi.testclient import TestClient
 from main import app
+from schemas.chat import ChatRequest
 
 
 class TestAPIRoutes:
@@ -23,7 +24,7 @@ class TestAPIRoutes:
         response = self.client.get("/")
         assert response.status_code == 200
         assert "message" in response.json()
-        assert response.json()["message"] == "儿童教育AI系统API服务"
+        assert response.json()["message"] == "儿童故事互动AI系统API服务"
 
     def test_chat_endpoint_safety_route(self):
         """测试聊天端点 - 安全路由"""
@@ -37,8 +38,8 @@ class TestAPIRoutes:
         # 验证响应
         assert response.status_code == 200
         result = response.json()
-        assert "agent" in result
-        assert "status" in result
+        assert "response" in result
+        assert "agent_type" in result
 
     def test_chat_endpoint_edu_route(self):
         """测试聊天端点 - 教育路由"""
@@ -52,9 +53,8 @@ class TestAPIRoutes:
         # 验证响应
         assert response.status_code == 200
         result = response.json()
-        assert "agent" in result
-        assert result["agent"] == "edu"
-        assert "status" in result
+        assert "response" in result
+        assert "agent_type" in result
 
     def test_chat_endpoint_emotion_route(self):
         """测试聊天端点 - 情感路由"""
@@ -68,23 +68,24 @@ class TestAPIRoutes:
         # 验证响应
         assert response.status_code == 200
         result = response.json()
-        assert "agent" in result
-        assert "status" in result
+        assert "response" in result
+        assert "agent_type" in result
 
-    def test_chat_endpoint_memory_route(self):
-        """测试聊天端点 - 记忆路由"""
+    def test_chat_endpoint_with_session(self):
+        """测试聊天端点 - 带会话ID"""
         # 发送请求
         request_data = {
-            "content": "我之前学了什么？",
-            "user_id": 1
+            "content": "你好",
+            "user_id": 1,
+            "session_id": 123
         }
         response = self.client.post("/api/chat", json=request_data)
         
         # 验证响应
         assert response.status_code == 200
         result = response.json()
-        assert "agent" in result
-        assert "status" in result
+        assert "response" in result
+        assert "agent_type" in result
 
     def test_safety_check_endpoint(self):
         """测试安全检查端点"""

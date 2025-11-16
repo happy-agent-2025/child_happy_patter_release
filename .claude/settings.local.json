@@ -19,7 +19,8 @@
       "Bash(node test_frontend_connection.js:*)",
       "Bash(npm run build)",
       "Bash(node test_browser_console.js:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

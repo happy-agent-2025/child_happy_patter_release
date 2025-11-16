@@ -2,9 +2,20 @@ import pytest
 import sys
 import os
 import asyncio
+import warnings
+import logging
 
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+# 配置警告过滤器 - 在导入任何模块之前
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+# 配置日志级别
+logging.getLogger('comtypes').setLevel(logging.WARNING)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
+logging.getLogger('httpx').setLevel(logging.WARNING)
+logging.getLogger('httpcore').setLevel(logging.WARNING)
 
 # 在Windows上设置事件循环策略以避免警告
 if sys.platform == "win32":

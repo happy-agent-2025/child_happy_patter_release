@@ -48,7 +48,7 @@ python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # 安装依赖
-pip install -r requirements.txt
+pip install -r requirements.txt --user -i https://pypi.tuna.tsinghua.edu.cn/simple/ --trusted-host pypi.tuna.tsinghua.edu.cn
 ```
 
 ### 启动服务

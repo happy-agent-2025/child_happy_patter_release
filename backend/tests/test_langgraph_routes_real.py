@@ -7,11 +7,16 @@ LangGraph Routes 真实接口测试
 import pytest
 import json
 import asyncio
+import sys
+import os
 from datetime import datetime, timedelta
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+
+# 添加项目根目录到Python路径
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 导入应用和数据库
 from main import app
@@ -30,8 +35,7 @@ engine = create_engine(
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# 创建测试客户端
-client = TestClient(app)
+# 测试客户端将在类的setup_class方法中初始化
 
 
 def override_get_db():
@@ -86,6 +90,11 @@ def test_session(db, test_user):
 class TestLangGraphChatReal:
     """测试真实的 /api/langgraph/chat 端点"""
 
+    @classmethod
+    def setup_class(cls):
+        """测试类初始化"""
+        cls.client = TestClient(app)
+
     def test_chat_success_simple(self, test_user):
         """测试简单聊天成功"""
         request_data = {
@@ -94,7 +103,7 @@ class TestLangGraphChatReal:
             "session_id": None
         }
 
-        response = client.post("/api/langgraph/chat", json=request_data)
+        response = self.client.post("/api/langgraph/chat", json=request_data)
 
         # 允许500错误（当Ollama不可用时），但系统应该仍然返回结构化响应
         if response.status_code == 500:
@@ -119,7 +128,7 @@ class TestLangGraphChatReal:
             "session_id": test_session.id
         }
 
-        response = client.post("/api/langgraph/chat", json=request_data)
+        response = self.client.post("/api/langgraph/chat", json=request_data)
 
         # 允许500错误
         if response.status_code == 500:
@@ -141,7 +150,7 @@ class TestLangGraphChatReal:
             "session_id": None
         }
 
-        response = client.post("/api/langgraph/chat", json=request_data)
+        response = self.client.post("/api/langgraph/chat", json=request_data)
 
         # 允许500错误（Ollama不可用）
         if response.status_code == 500:
@@ -165,7 +174,7 @@ class TestLangGraphChatReal:
             "session_id": None
         }
 
-        response = client.post("/api/langgraph/chat", json=request_data)
+        response = self.client.post("/api/langgraph/chat", json=request_data)
 
         # 允许500错误（Ollama不可用）
         if response.status_code == 500:
@@ -186,7 +195,7 @@ class TestLangGraphChatReal:
             "user_id": 1
         }
 
-        response = client.post("/api/langgraph/chat", json=request_data)
+        response = self.client.post("/api/langgraph/chat", json=request_data)
         assert response.status_code == 422
 
     def test_chat_empty_content(self, test_user):
@@ -196,7 +205,7 @@ class TestLangGraphChatReal:
             "user_id": test_user.id
         }
 
-        response = client.post("/api/langgraph/chat", json=request_data)
+        response = self.client.post("/api/langgraph/chat", json=request_data)
         # 空内容应该被接受或给出明确错误
         assert response.status_code in [200, 422]
 
@@ -209,7 +218,7 @@ class TestLangGraphChatReal:
             "user_id": test_user.id
         }
 
-        response = client.post("/api/langgraph/chat", json=request_data)
+        response = self.client.post("/api/langgraph/chat", json=request_data)
 
         # 允许500错误（Ollama不可用）
         if response.status_code == 500:
@@ -226,6 +235,11 @@ class TestLangGraphChatReal:
 class TestLangGraphStreamChatReal:
     """测试真实的 /api/langgraph/chat/stream 端点"""
 
+    @classmethod
+    def setup_class(cls):
+        """测试类初始化"""
+        cls.client = TestClient(app)
+
     def test_stream_chat_success(self, test_user):
         """测试流式聊天成功"""
         request_data = {
@@ -233,7 +247,7 @@ class TestLangGraphStreamChatReal:
             "user_id": test_user.id
         }
 
-        response = client.post("/api/langgraph/chat/stream", json=request_data)
+        response = self.client.post("/api/langgraph/chat/stream", json=request_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -251,7 +265,7 @@ class TestLangGraphStreamChatReal:
             "session_id": test_session.id
         }
 
-        response = client.post("/api/langgraph/chat/stream", json=request_data)
+        response = self.client.post("/api/langgraph/chat/stream", json=request_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -263,9 +277,14 @@ class TestLangGraphStreamChatReal:
 class TestWorkflowStateReal:
     """测试真实的 /api/langgraph/workflow/state 端点"""
 
+    @classmethod
+    def setup_class(cls):
+        """测试类初始化"""
+        cls.client = TestClient(app)
+
     def test_workflow_state_success(self):
         """测试获取工作流状态"""
-        response = client.get("/api/langgraph/workflow/state?user_id=test123")
+        response = self.client.get("/api/langgraph/workflow/state?user_id=test123")
         assert response.status_code == 200
 
         data = response.json()
@@ -299,12 +318,17 @@ class TestWorkflowStateReal:
 
     def test_workflow_state_missing_user_id(self):
         """测试缺少用户ID参数"""
-        response = client.get("/api/langgraph/workflow/state")
+        response = self.client.get("/api/langgraph/workflow/state")
         assert response.status_code == 422
 
 
 class TestConversationFlowAnalyticsReal:
     """测试真实的 /api/langgraph/analytics/conversation-flow 端点"""
+
+    @classmethod
+    def setup_class(cls):
+        """测试类初始化"""
+        cls.client = TestClient(app)
 
     def test_conversation_flow_with_data(self, test_user, test_session):
         """测试有数据的对话流分析"""
@@ -324,11 +348,11 @@ class TestConversationFlowAnalyticsReal:
                 "user_id": test_user.id,
                 "session_id": test_session.id
             }
-            response = client.post("/api/langgraph/chat", json=request_data)
+            response = self.client.post("/api/langgraph/chat", json=request_data)
             assert response.status_code == 200
 
         # 现在获取分析数据
-        response = client.get(f"/api/langgraph/analytics/conversation-flow?user_id={test_user.id}&days=7")
+        response = self.client.get(f"/api/langgraph/analytics/conversation-flow?user_id={test_user.id}&days=7")
         assert response.status_code == 200
 
         data = response.json()
@@ -351,7 +375,7 @@ class TestConversationFlowAnalyticsReal:
 
     def test_conversation_flow_no_data(self, test_user):
         """测试没有对话数据的分析"""
-        response = client.get(f"/api/langgraph/analytics/conversation-flow?user_id={test_user.id}&days=7")
+        response = self.client.get(f"/api/langgraph/analytics/conversation-flow?user_id={test_user.id}&days=7")
         assert response.status_code == 200
 
         data = response.json()
@@ -361,20 +385,25 @@ class TestConversationFlowAnalyticsReal:
 
     def test_conversation_flow_invalid_days(self, test_user):
         """测试无效的天数参数"""
-        response = client.get(f"/api/langgraph/analytics/conversation-flow?user_id={test_user.id}&days=400")
+        response = self.client.get(f"/api/langgraph/analytics/conversation-flow?user_id={test_user.id}&days=400")
         assert response.status_code == 422  # 超过最大值限制
 
-        response = client.get(f"/api/langgraph/analytics/conversation-flow?user_id={test_user.id}&days=0")
+        response = self.client.get(f"/api/langgraph/analytics/conversation-flow?user_id={test_user.id}&days=0")
         assert response.status_code == 422  # 小于最小值限制
 
     def test_conversation_flow_missing_user_id(self):
         """测试缺少用户ID参数"""
-        response = client.get("/api/langgraph/analytics/conversation-flow?days=7")
+        response = self.client.get("/api/langgraph/analytics/conversation-flow?days=7")
         assert response.status_code == 422
 
 
 class TestSessionCreateReal:
     """测试真实的 /api/langgraph/session/create 端点"""
+
+    @classmethod
+    def setup_class(cls):
+        """测试类初始化"""
+        cls.client = TestClient(app)
 
     def test_session_create_success(self, test_user):
         """测试成功创建会话"""
@@ -383,7 +412,7 @@ class TestSessionCreateReal:
             "title": "新测试会话"
         }
 
-        response = client.post("/api/langgraph/session/create", json=request_data)
+        response = self.client.post("/api/langgraph/session/create", json=request_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -408,7 +437,7 @@ class TestSessionCreateReal:
             "title": None
         }
 
-        response = client.post("/api/langgraph/session/create", json=request_data)
+        response = self.client.post("/api/langgraph/session/create", json=request_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -420,12 +449,17 @@ class TestSessionCreateReal:
             "title": "测试会话"
         }
 
-        response = client.post("/api/langgraph/session/create", json=request_data)
+        response = self.client.post("/api/langgraph/session/create", json=request_data)
         assert response.status_code == 422
 
 
 class TestSessionHistoryReal:
     """测试真实的 /api/langgraph/session/{session_id}/history 端点"""
+
+    @classmethod
+    def setup_class(cls):
+        """测试类初始化"""
+        cls.client = TestClient(app)
 
     def test_session_history_with_data(self, test_user, test_session):
         """测试有数据的会话历史"""
@@ -436,11 +470,11 @@ class TestSessionHistoryReal:
                 "user_id": test_user.id,
                 "session_id": test_session.id
             }
-            response = client.post("/api/langgraph/chat", json=request_data)
+            response = self.client.post("/api/langgraph/chat", json=request_data)
             assert response.status_code == 200
 
         # 获取历史记录
-        response = client.get(f"/api/langgraph/session/{test_session.id}/history")
+        response = self.client.get(f"/api/langgraph/session/{test_session.id}/history")
         assert response.status_code == 200
 
         data = response.json()
@@ -473,10 +507,10 @@ class TestSessionHistoryReal:
                 "user_id": test_user.id,
                 "session_id": test_session.id
             }
-            client.post("/api/langgraph/chat", json=request_data)
+            self.client.post("/api/langgraph/chat", json=request_data)
 
         # 测试限制
-        response = client.get(f"/api/langgraph/session/{test_session.id}/history?limit=3")
+        response = self.client.get(f"/api/langgraph/session/{test_session.id}/history?limit=3")
         assert response.status_code == 200
 
         data = response.json()
@@ -485,7 +519,7 @@ class TestSessionHistoryReal:
 
     def test_session_history_not_found(self):
         """测试不存在的会话ID"""
-        response = client.get("/api/langgraph/session/99999/history")
+        response = self.client.get("/api/langgraph/session/99999/history")
         assert response.status_code == 404
 
         data = response.json()
@@ -498,11 +532,11 @@ class TestSessionHistoryReal:
             "user_id": test_user.id,
             "title": "空会话"
         }
-        session_response = client.post("/api/langgraph/session/create", json=session_request)
+        session_response = self.client.post("/api/langgraph/session/create", json=session_request)
         session_data = session_response.json()
 
         # 获取空历史
-        response = client.get(f"/api/langgraph/session/{session_data['id']}/history")
+        response = self.client.get(f"/api/langgraph/session/{session_data['id']}/history")
         assert response.status_code == 200
 
         data = response.json()
@@ -512,6 +546,11 @@ class TestSessionHistoryReal:
 
 class TestUserInsightsReal:
     """测试真实的 /api/langgraph/users/{user_id}/insights 端点"""
+
+    @classmethod
+    def setup_class(cls):
+        """测试类初始化"""
+        cls.client = TestClient(app)
 
     def test_user_insights_with_data(self, test_user, test_session):
         """测试有数据的用户洞察"""
@@ -529,11 +568,11 @@ class TestUserInsightsReal:
                 "user_id": test_user.id,
                 "session_id": test_session.id
             }
-            response = client.post("/api/langgraph/chat", json=request_data)
+            response = self.client.post("/api/langgraph/chat", json=request_data)
             assert response.status_code == 200
 
         # 获取用户洞察
-        response = client.get(f"/api/langgraph/users/{test_user.id}/insights")
+        response = self.client.get(f"/api/langgraph/users/{test_user.id}/insights")
         assert response.status_code == 200
 
         data = response.json()
@@ -556,7 +595,7 @@ class TestUserInsightsReal:
 
     def test_user_insights_no_conversations(self, test_user):
         """测试没有对话记录的用户"""
-        response = client.get(f"/api/langgraph/users/{test_user.id}/insights")
+        response = self.client.get(f"/api/langgraph/users/{test_user.id}/insights")
         assert response.status_code == 200
 
         data = response.json()
@@ -567,7 +606,7 @@ class TestUserInsightsReal:
 
     def test_user_insights_not_found(self):
         """测试不存在的用户ID"""
-        response = client.get("/api/langgraph/users/99999/insights")
+        response = self.client.get("/api/langgraph/users/99999/insights")
         assert response.status_code == 200  # 应该返回空洞察而不是404
 
         data = response.json()
@@ -577,9 +616,14 @@ class TestUserInsightsReal:
 class TestWorkflowTestReal:
     """测试真实的 /api/langgraph/test/workflow 端点"""
 
+    @classmethod
+    def setup_class(cls):
+        """测试类初始化"""
+        cls.client = TestClient(app)
+
     def test_workflow_test_success(self):
         """测试工作流测试成功"""
-        response = client.post("/api/langgraph/test/workflow")
+        response = self.client.post("/api/langgraph/test/workflow")
         assert response.status_code == 200
 
         data = response.json()
@@ -602,6 +646,11 @@ class TestWorkflowTestReal:
 class TestIntegrationReal:
     """真实集成测试"""
 
+    @classmethod
+    def setup_class(cls):
+        """测试类初始化"""
+        cls.client = TestClient(app)
+
     def test_complete_user_journey(self, test_user):
         """测试完整的用户旅程"""
         print("=== 开始完整用户旅程测试 ===")
@@ -611,7 +660,7 @@ class TestIntegrationReal:
             "user_id": test_user.id,
             "title": "用户旅程测试会话"
         }
-        session_response = client.post("/api/langgraph/session/create", json=session_request)
+        session_response = self.client.post("/api/langgraph/session/create", json=session_request)
         assert session_response.status_code == 200
         session_data = session_response.json()
         session_id = session_data["id"]
@@ -631,7 +680,7 @@ class TestIntegrationReal:
                 "user_id": test_user.id,
                 "session_id": session_id
             }
-            chat_response = client.post("/api/langgraph/chat", json=chat_request)
+            chat_response = self.client.post("/api/langgraph/chat", json=chat_request)
 
             # 检查响应状态，允许500错误（当Ollama不可用时）
             if chat_response.status_code == 500:
@@ -645,26 +694,26 @@ class TestIntegrationReal:
                 pytest.fail(f"对话失败，状态码: {chat_response.status_code}")
 
         # 3. 获取会话历史
-        history_response = client.get(f"/api/langgraph/session/{session_id}/history")
+        history_response = self.client.get(f"/api/langgraph/session/{session_id}/history")
         assert history_response.status_code == 200
         history_data = history_response.json()
         print(f"3. 会话历史: 总对话数 {history_data['total_conversations']}")
 
         # 4. 获取用户洞察
-        insights_response = client.get(f"/api/langgraph/users/{test_user.id}/insights")
+        insights_response = self.client.get(f"/api/langgraph/users/{test_user.id}/insights")
         assert insights_response.status_code == 200
         insights_data = insights_response.json()
         print(f"4. 用户洞察: 总对话数 {insights_data['total_conversations']}")
         print(f"   代理偏好: {insights_data['agent_preferences']}")
 
         # 5. 获取对话流分析
-        analytics_response = client.get(f"/api/langgraph/analytics/conversation-flow?user_id={test_user.id}&days=1")
+        analytics_response = self.client.get(f"/api/langgraph/analytics/conversation-flow?user_id={test_user.id}&days=1")
         assert analytics_response.status_code == 200
         analytics_data = analytics_response.json()
         print(f"5. 对话分析: {analytics_data['total_conversations']} 次对话")
 
         # 6. 检查工作流状态 - 允许失败
-        workflow_response = client.get(f"/api/langgraph/workflow/state?user_id={test_user.id}")
+        workflow_response = self.client.get(f"/api/langgraph/workflow/state?user_id={test_user.id}")
         if workflow_response.status_code == 200:
             workflow_data = workflow_response.json()
             print(f"6. 工作流状态: {workflow_data['workflow_info']['name']}")
@@ -672,7 +721,7 @@ class TestIntegrationReal:
             print(f"6. 工作流状态: 暂时不可用（状态码: {workflow_response.status_code}）")
 
         # 7. 运行系统测试 - 允许失败
-        test_response = client.post("/api/langgraph/test/workflow")
+        test_response = self.client.post("/api/langgraph/test/workflow")
         if test_response.status_code == 200:
             test_data = test_response.json()
             print(f"7. 系统测试: {test_data['test_status']}")
@@ -691,7 +740,7 @@ class TestIntegrationReal:
         def make_request(request_id):
             try:
                 start_time = time.time()
-                response = client.get(f"/api/langgraph/workflow/state?user_id={test_user.id}_{request_id}")
+                response = self.client.get(f"/api/langgraph/workflow/state?user_id={test_user.id}_{request_id}")
                 end_time = time.time()
                 results.append({
                     "request_id": request_id,
@@ -741,7 +790,7 @@ class TestIntegrationReal:
                 "content": content,
                 "user_id": test_user.id
             }
-            response = client.post("/api/langgraph/chat", json=request_data)
+            response = self.client.post("/api/langgraph/chat", json=request_data)
             assert response.status_code == 200
 
             data = response.json()
@@ -756,7 +805,7 @@ class TestIntegrationReal:
             "content": "正常消息",
             "user_id": test_user.id
         }
-        response = client.post("/api/langgraph/chat", json=normal_request)
+        response = self.client.post("/api/langgraph/chat", json=normal_request)
         assert response.status_code == 200
         print("正常请求成功")
 
@@ -765,7 +814,7 @@ class TestIntegrationReal:
             "content": "",  # 空内容
             "user_id": test_user.id
         }
-        response = client.post("/api/langgraph/chat", json=invalid_request)
+        response = self.client.post("/api/langgraph/chat", json=invalid_request)
         # 系统应该能处理空内容
         print(f"空内容请求状态: {response.status_code}")
 
@@ -774,7 +823,7 @@ class TestIntegrationReal:
             "content": "恢复测试消息",
             "user_id": test_user.id
         }
-        response = client.post("/api/langgraph/chat", json=recovery_request)
+        response = self.client.post("/api/langgraph/chat", json=recovery_request)
         assert response.status_code == 200
         print("恢复请求成功")
 
@@ -787,7 +836,7 @@ class TestIntegrationReal:
             "content": long_text,
             "user_id": test_user.id
         }
-        response = client.post("/api/langgraph/chat", json=request_data)
+        response = self.client.post("/api/langgraph/chat", json=request_data)
 
         # 允许500错误（Ollama不可用）
         if response.status_code == 500:
@@ -804,6 +853,11 @@ class TestIntegrationReal:
 class TestPerformanceReal:
     """真实性能测试"""
 
+    @classmethod
+    def setup_class(cls):
+        """测试类初始化"""
+        cls.client = TestClient(app)
+
     def test_response_time_baseline(self, test_user):
         """测试响应时间基线"""
         import time
@@ -817,7 +871,7 @@ class TestPerformanceReal:
         response_times = []
         for i in range(5):
             start_time = time.time()
-            response = client.post("/api/langgraph/chat", json=request_data)
+            response = self.client.post("/api/langgraph/chat", json=request_data)
             end_time = time.time()
 
             assert response.status_code == 200
@@ -847,7 +901,7 @@ class TestPerformanceReal:
                 "content": f"内存测试消息 {i}",
                 "user_id": test_user.id
             }
-            response = client.post("/api/langgraph/chat", json=request_data)
+            response = self.client.post("/api/langgraph/chat", json=request_data)
             assert response.status_code == 200
 
         # 检查内存使用

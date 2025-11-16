@@ -27,7 +27,7 @@ def init_db():
         # 创建数据库引擎
         engine = create_engine(
             settings.database_url,
-            echo=settings.DEBUG if hasattr(settings, 'DEBUG') else False,
+            echo=settings.DEBUG if hasattr(settings, 'DEBUG') else False, # type: ignore
             pool_pre_ping=True,
             pool_recycle=3600
         )

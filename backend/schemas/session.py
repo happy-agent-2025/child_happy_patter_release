@@ -1,7 +1,7 @@
 """
 会话管理相关的 Pydantic 模型
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from datetime import datetime
 
@@ -21,8 +21,7 @@ class SessionResponse(BaseModel):
     updated_at: datetime
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SessionUpdateRequest(BaseModel):

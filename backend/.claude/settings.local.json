@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Read(//home/datawhale/Projects/child_happy_patter_release/frontend/src/**)"
+      "Read(//home/datawhale/Projects/child_happy_patter_release/frontend/src/**)",
+      "Bash(python:*)",
+      "Bash(tree:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(pip install:*)",
+      "Bash(git add:*)",
+      "Bash(set:*)"
     ],
     "deny": [],
     "ask": []

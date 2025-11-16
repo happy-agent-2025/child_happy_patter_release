@@ -94,6 +94,5 @@ if __name__ == "__main__":
         app,
         host=settings.host,
         port=settings.port,
-        reload=settings.reload,
-        debug=settings.debug
+        reload=settings.reload
     )

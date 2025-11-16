@@ -11,7 +11,7 @@ import re
 import json
 from datetime import datetime
 
-from utils.openai_client import openai_client
+from core.openai_client import openai_client
 from agents.meta_agent import MetaAgent
 from agents.safety_agent import SafetyAgent
 from agents.emotion_agent import EmotionAgent

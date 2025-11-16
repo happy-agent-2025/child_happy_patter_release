@@ -15,7 +15,7 @@ from datetime import datetime
 from dataclasses import dataclass, field
 import logging
 
-from utils.openai_client import openai_client
+from core.openai_client import openai_client
 from agents.safety_agent import SafetyAgent
 from agents.world_agent import world_agent
 from agents.emotion_agent import EmotionAgent

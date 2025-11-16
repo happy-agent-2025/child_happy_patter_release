@@ -58,9 +58,9 @@ ollama_timeout: int = 60
 mem0_enabled: bool = True
 mem0_vector_store_provider: str = "qdrant"
 mem0_qdrant_path: str = "./qdrant_db"
-mem0_collection_name: str = "happy_partner"
-mem0_embedding_model: str = "text-embedding-3-small"
-mem0_embedding_dims: int = 1536
+mem0_collection_name: str = "happy_partner_v2"
+mem0_embedding_model: str = "nomic-embed-text:v1.5"
+mem0_embedding_dims: int = 768
 mem0_cache_ttl: int = 300
 ```
 

@@ -468,8 +468,8 @@ class HappyPartnerGraph:
     def _async_persist_to_db(self, state: AgentState, conversation_record: Dict[str, Any]) -> None:
         """异步持久化到数据库"""
         try:
-            from db.database_service import DatabaseService
-            from db.database import SessionLocal
+            from utils.db.database_service import DatabaseService
+            from utils.db.database import SessionLocal
 
             # 使用线程池异步执行，避免阻塞主流程
             def persist_task():
@@ -566,7 +566,7 @@ class HappyPartnerGraph:
     def _generate_summary(self, history: List[Dict[str, Any]]) -> str:
         """生成对话摘要"""
         try:
-            from utils.openai_client import openai_client
+            from core.openai_client import openai_client
 
             # 构建历史文本
             history_text = ""

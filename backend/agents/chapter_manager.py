@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 from agents.role_agent import RoleAgent, TypesOfRole, RoleEmotion
 from agents.role_factory import role_factory, RoleConfig
-from utils.openai_client import openai_client
+from core.openai_client import openai_client
 from agents.safety_agent import SafetyAgent
 
 

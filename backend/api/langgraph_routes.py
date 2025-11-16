@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -11,13 +10,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from agents.multi_agent import multi_agent
-from db.database import get_db
-from db.database_service import DatabaseService
+from utils.db.database import get_db
+from utils.db.database_service import DatabaseService
 from models.user import Conversation
-from schemas import (
-    ChatRequest, ChatResponse,
-    SessionCreateRequest, SessionResponse
-)
+from schemas.session import SessionCreateRequest, SessionResponse
+from schemas.chat import ChatRequest, ChatResponse
 
 router = APIRouter(prefix="/langgraph", tags=["LangGraph"])
 

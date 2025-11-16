@@ -1,6 +1,5 @@
 import os
 from typing import Optional
-from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
 
@@ -16,10 +15,16 @@ class Settings(BaseSettings):
     app_description: str = "一个多代理架构的儿童教育AI系统，专注于教育辅助和情感陪伴"
 
     # 服务器配置
-    host: str = "127.0.0.1"
-    port: int = 8001
+    host: str = "0.0.0.0"
+    port: int = 3000
     debug: bool = False
     reload: bool = False
+    
+    # ota配置
+    websocket_url: str = 'ws://192.168.0.108:3000/ws'
+    websocket_token: str =  'zhangxiao_123456'
+    websocket_reconnect: int = 50000
+    websocket_version: int = 1
 
     # 数据库配置
     database_url: str = "sqlite:///./happy_partner.db"
@@ -38,7 +43,7 @@ class Settings(BaseSettings):
     # OpenAI配置
     openai_api_key: str = "sk-054b723c3a1b4e21839f560466cf6f3d"
     openai_base_url: str = "https://api.deepseek.com"
-    openai_default_model: str = "qwen-turbo"
+    openai_default_model: str = "deepseek-chat"
     openai_temperature: float = 0.7
     openai_max_tokens: int = 2000
     openai_timeout: int = 30
@@ -50,12 +55,14 @@ class Settings(BaseSettings):
     ollama_timeout: int = 60
 
     # Mem0记忆系统配置
-    mem0_enabled: bool = True
-    mem0_vector_store_provider: str = "qdrant"
+    mem0_enabled: bool = True  # 暂时禁用Mem0以避免维度冲突
+    mem0_vector_store_provider: str = "qdrant"  # qdrant, chroma, pinecone
     mem0_qdrant_path: str = "./qdrant_db"
-    mem0_collection_name: str = "happy_partner"
-    mem0_embedding_model: str = "text-embedding-3-small"
-    mem0_embedding_dims: int = 1536
+    mem0_collection_name: str = "happy_partner_v2"  # 使用新集合名称避免维度冲突
+    mem0_api_key: str = ""
+    mem0_base_url: str = "http://localhost:11436"
+    mem0_embedding_model: str = "nomic-embed-text:v1.5"  # DeepSeek兼容的嵌入模型
+    mem0_embedding_dims: int = 768
     mem0_cache_ttl: int = 300  # 缓存5分钟
 
     # TTS语音合成配置
@@ -114,14 +121,6 @@ class Settings(BaseSettings):
     cors_allow_credentials: bool = True
     cors_allow_methods: list = ["*"]
     cors_allow_headers: list = ["*"]
-
-    model_config = ConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-        extra="ignore"
-    )
-
 
 # 全局配置实例
 settings = Settings()

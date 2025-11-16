@@ -82,7 +82,7 @@ class StoryMemoryManager:
     def __init__(self):
         self.memory_client = self._init_memory_client()
         self.memory_cache: Dict[str, Dict[str, Any]] = {}  # 简单的内存缓存
-        self.cache_ttl = 300  # 缓存5分钟
+        self.cache_ttl = settings.mem0_cache_ttl  # 缓存时间
         self.performance_stats = {
             "total_searches": 0,
             "cache_hits": 0,
@@ -102,18 +102,18 @@ class StoryMemoryManager:
             # 使用Qdrant本地模式（Windows兼容，无需服务器）
             config = {
                 "vector_store": {
-                    "provider": "qdrant",
+                    "provider": settings.mem0_vector_store_provider,
                     "config": {
-                        "path": "./qdrant_db",  # 本地文件存储，无需服务器
-                        "collection_name": "happy_partner",
+                        "path": settings.mem0_qdrant_path,
+                        "collection_name": settings.mem0_collection_name,
                     },
                 },
                 "llm": {
                     "provider": "openai",
                     "config": {
-                        "model": "qwen-turbo",
-                        "temperature": 0.7,
-                        "max_tokens": 2000,
+                        "model": settings.openai_default_model,
+                        "temperature": settings.openai_temperature,
+                        "max_tokens": settings.openai_max_tokens,
                         "api_key": settings.openai_api_key,
                         "openai_base_url": settings.openai_base_url,
                     },
@@ -121,10 +121,10 @@ class StoryMemoryManager:
                 "embedder": {
                     "provider": "openai",
                     "config": {
-                        "model": "text-embedding-3-small",
+                        "model": settings.mem0_embedding_model,
                         "api_key": settings.openai_api_key,
                         "openai_base_url": settings.openai_base_url,
-                        "embedding_dims": 1536,
+                        "embedding_dims": settings.mem0_embedding_dims,
                     },
                 },
             }
@@ -138,9 +138,9 @@ class StoryMemoryManager:
                     "llm": {
                         "provider": "openai",
                         "config": {
-                            "model": "qwen-turbo",
-                            "temperature": 0.7,
-                            "max_tokens": 2000,
+                            "model": settings.openai_default_model,
+                            "temperature": settings.openai_temperature,
+                            "max_tokens": settings.openai_max_tokens,
                             "api_key": settings.openai_api_key,
                             "openai_base_url": settings.openai_base_url,
                         },
@@ -148,10 +148,10 @@ class StoryMemoryManager:
                     "embedder": {
                         "provider": "openai",
                         "config": {
-                            "model": "text-embedding-3-small",
+                            "model": settings.mem0_embedding_model,
                             "api_key": settings.openai_api_key,
                             "openai_base_url": settings.openai_base_url,
-                            "embedding_dims": 1536,
+                            "embedding_dims": settings.mem0_embedding_dims,
                         },
                     },
                 }

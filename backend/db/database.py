@@ -4,8 +4,10 @@ try:
     from sqlalchemy.orm import declarative_base, sessionmaker
     import os
 
+    from config.settings import settings
+
     # 获取数据库URL
-    DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./happy_partner.db")
+    DATABASE_URL = settings.database_url
 
     # 创建数据库引擎
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})

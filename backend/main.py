@@ -7,6 +7,14 @@ import os
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# 在导入任何模块之前配置警告
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+# 配置日志
+from config.warnings_config import configure_logging
+configure_logging()
+
 # 导入全局异常处理
 from core.exceptions import setup_exception_handlers
 
@@ -22,10 +30,12 @@ else:
 # 导入路由
 from api.langgraph_routes import router as langgraph_router
 
+from config.settings import settings
+
 app = FastAPI(
-    title="Happy Partner - 儿童教育AI系统",
-    description="一个多代理架构的儿童教育AI系统，专注于教育辅助和情感陪伴 - 支持LangGraph工作流",
-    version="0.2.0",
+    title=settings.app_name,
+    description=settings.app_description,
+    version=settings.app_version,
     openapi_url="/openapi.json",
     docs_url=None,
     redoc_url=None
@@ -37,10 +47,10 @@ setup_exception_handlers(app)
 # 添加CORS中间件
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.cors_allow_origins,
+    allow_credentials=settings.cors_allow_credentials,
+    allow_methods=settings.cors_allow_methods,
+    allow_headers=settings.cors_allow_headers,
 )
 
 # 包含路由
@@ -79,7 +89,11 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
 
-    # 使用默认端口8001避免冲突
-    port = 8001
-    host = "127.0.0.1"
-    uvicorn.run(app, host=host, port=port)
+    # 使用配置中的服务器设置
+    uvicorn.run(
+        app,
+        host=settings.host,
+        port=settings.port,
+        reload=settings.reload,
+        debug=settings.debug
+    )

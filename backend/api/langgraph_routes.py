@@ -220,7 +220,7 @@ async def get_conversation_flow_analytics(
             "agent_transitions": agent_transitions,
             "conversation_flow": agent_flow,
             "insights": {
-                "most_used_agent": max(agent_stats.items(), key=lambda x: x[1])[0] if agent_stats else None,
+                "most_used_agent": max(agent_stats.items(), key=lambda x: x[1])[0] if agent_stats and len(agent_stats) > 0 else None,
                 "flow_complexity": len(agent_transitions),
                 "session_continuity": len(conversations) > 5
             }

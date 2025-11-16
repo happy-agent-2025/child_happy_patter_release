@@ -92,11 +92,16 @@ class StoryMemoryManager:
 
         logger.info("故事记忆管理器初始化完成")
 
-    def _init_memory_client(self) -> Optional[Memory]:
+    def _init_memory_client(self) -> Optional[Memory]: # type: ignore
         """初始化mem0客户端"""
         if Memory is None:
             logger.warning("mem0 not available, running without persistent memory")
             return None
+
+        # 检查是否启用mem0
+        if not settings.mem0_enabled:
+            logger.info("Mem0已禁用，使用内存模式")
+            return self._init_memory_only_client()
 
         try:
             # 使用Qdrant本地模式（Windows兼容，无需服务器）
@@ -123,43 +128,73 @@ class StoryMemoryManager:
                     "config": {
                         "model": settings.mem0_embedding_model,
                         "api_key": settings.openai_api_key,
-                        "openai_base_url": settings.openai_base_url,
+                        "openai_base_url": settings.mem0_base_url,
                         "embedding_dims": settings.mem0_embedding_dims,
                     },
                 },
             }
             logger.info("使用Qdrant本地模式初始化mem0客户端")
-            return Memory.from_config(config_dict=config)
+            client = Memory.from_config(config_dict=config)
+
+            # 测试客户端是否正常工作
+            test_result = client.search(query="test", user_id="test", limit=1)
+            logger.info("Mem0客户端测试成功")
+            return client
+
         except Exception as e:
             logger.error(f"初始化mem0客户端失败: {e}")
-            # 尝试使用内存模式作为降级方案
-            try:
-                config = {
-                    "llm": {
-                        "provider": "openai",
-                        "config": {
-                            "model": settings.openai_default_model,
-                            "temperature": settings.openai_temperature,
-                            "max_tokens": settings.openai_max_tokens,
-                            "api_key": settings.openai_api_key,
-                            "openai_base_url": settings.openai_base_url,
-                        },
+
+            # 检查是否是文件锁定错误
+            if "另一个程序正在使用此文件" in str(e) or "WinError 32" in str(e):
+                logger.warning("检测到数据库文件被锁定，切换到内存模式")
+                return self._init_memory_only_client()
+
+            # 检查是否是模型不存在错误
+            if "Model Not Exist" in str(e):
+                logger.error(f"模型配置错误: {settings.mem0_embedding_model} 在 {settings.openai_base_url} 不存在")
+                logger.info("请检查嵌入模型配置，切换到内存模式")
+                return self._init_memory_only_client()
+
+            # 其他错误也降级到内存模式
+            logger.info("使用内存模式作为降级方案")
+            return self._init_memory_only_client()
+
+    def _init_memory_only_client(self) -> Optional[Memory]:
+        """初始化仅内存模式的mem0客户端"""
+        try:
+            config = {
+                "llm": {
+                    "provider": "openai",
+                    "config": {
+                        "model": settings.openai_default_model,
+                        "temperature": settings.openai_temperature,
+                        "max_tokens": settings.openai_max_tokens,
+                        "api_key": settings.openai_api_key,
+                        "openai_base_url": settings.openai_base_url,
                     },
-                    "embedder": {
-                        "provider": "openai",
-                        "config": {
-                            "model": settings.mem0_embedding_model,
-                            "api_key": settings.openai_api_key,
-                            "openai_base_url": settings.openai_base_url,
-                            "embedding_dims": settings.mem0_embedding_dims,
-                        },
+                },
+                "embedder": {
+                    "provider": "openai",
+                    "config": {
+                        "model": settings.mem0_embedding_model,
+                        "api_key": settings.openai_api_key,
+                        "openai_base_url": settings.mem0_base_url,
+                        "embedding_dims": settings.mem0_embedding_dims,
                     },
-                }
-                logger.info("使用内存模式初始化mem0客户端")
-                return Memory.from_config(config_dict=config)
-            except Exception as e2:
-                logger.error(f"内存模式也初始化失败: {e2}")
+                },
+            }
+            logger.info("使用内存模式初始化mem0客户端")
+            
+            if Memory is None:  # 兼容mem0未安装的情况
                 return None
+            
+            client = Memory.from_config(config_dict=config)
+            logger.info("内存模式Mem0客户端初始化成功")
+            return client
+        except Exception as e:
+            logger.error(f"内存模式也初始化失败: {e}")
+            logger.warning("系统将在无记忆模式下运行")
+            return None
 
     def store_world_memory(
         self, world_data: Dict[str, Any], user_id: str, story_id: str
@@ -176,6 +211,11 @@ class StoryMemoryManager:
             记忆ID
         """
         try:
+            # 检查mem0客户端是否可用
+            if not self.memory_client:
+                logger.warning("Mem0客户端不可用，跳过世界观记忆存储")
+                return f"mem0_disabled_{int(time.time())}"
+
             # 构建记忆内容
             memory_content = f"""
 故事世界观设定：
@@ -233,6 +273,11 @@ class StoryMemoryManager:
     ) -> str:
         """存储角色记忆"""
         try:
+            # 检查mem0客户端是否可用
+            if not self.memory_client:
+                logger.warning("Mem0客户端不可用，跳过角色记忆存储")
+                return f"mem0_disabled_{int(time.time())}"
+
             memory_content = f"""
 角色信息：
 - 角色名称: {role_data.get('name', '')}
@@ -289,6 +334,11 @@ class StoryMemoryManager:
     ) -> str:
         """存储故事进度"""
         try:
+            # 检查mem0客户端是否可用
+            if not self.memory_client:
+                logger.warning("Mem0客户端不可用，跳过故事进度存储")
+                return f"mem0_disabled_{int(time.time())}"
+
             memory_content = f"""
 故事进度更新：
 - 章节标题: {progress_data.get('chapter_title', '')}
@@ -343,6 +393,11 @@ class StoryMemoryManager:
     ) -> str:
         """存储互动历史"""
         try:
+            # 检查mem0客户端是否可用
+            if not self.memory_client:
+                logger.warning("Mem0客户端不可用，跳过互动历史存储")
+                return f"mem0_disabled_{int(time.time())}"
+
             memory_content = f"""
 故事互动记录：
 - 角色: {interaction_data.get('role_name', '')}
@@ -407,6 +462,7 @@ class StoryMemoryManager:
                 return cached_result
 
             if not self.memory_client:
+                logger.warning("Mem0客户端不可用，返回空搜索结果")
                 return []
 
             # 构建搜索过滤器
@@ -569,6 +625,11 @@ class StoryMemoryManager:
     ) -> bool:
         """更新用户偏好"""
         try:
+            # 检查mem0客户端是否可用
+            if not self.memory_client:
+                logger.warning("Mem0客户端不可用，跳过用户偏好更新")
+                return False
+
             preference_content = f"""
 用户偏好更新：
 - 偏好类型: {preferences.get('type', '')}

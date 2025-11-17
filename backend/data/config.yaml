@@ -1,0 +1,57 @@
+hello_message:
+  type: "hello"
+  transport: "websocket"
+  session_id: None
+  audio_params:
+    sample_rate: 16000
+    channels: 1
+    frame_duration: 60
+    format: "opus"
+
+
+prompt: "不要回复表情"
+
+server:
+  port: 3000
+  host: 0.0.0.0
+
+select_model: 
+  TTS: "EdgeTTS"
+  ASR: "FunASR"
+  LLM: "DeepSeek"
+  VAD: "Silero"
+
+TTS:
+  EdgeTTS:
+    type: "edge"
+    output_dir: "ai_core/tts/temp"
+    voice: "zh-CN-XiaoxiaoNeural"
+
+
+LLM:
+  DeepSeek:
+    type: "chatDeepSeek"
+    model_name: "deepseek-chat"
+    api_key: "sk-054b723c3a1b4e21839f560466cf6f3d"
+    base_url: "https://api.deepseek.com"
+
+# 语法：每个变量后必须要加空格
+ASR:
+  FunASR:
+    type: "fun_asr"
+    model_dir: "model\\funasr"
+    output_dir: "ai_core\\asr\\tmp"
+
+VAD:
+  Silero:
+    type: "silero"
+    model_dir: "model\\silero-vad"
+    min_silence_ms: 600
+    threshold: 0.5 
+
+# 日志配置
+log:
+  # 日志级别
+  level: INFO
+  # 日志输出路径
+  output_dir: "log"

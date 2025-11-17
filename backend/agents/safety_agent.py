@@ -1,5 +1,5 @@
 from typing import Dict, Any, List
-from core.openai_client import openai_client
+from ai_core.openai_client import openai_client
 import re
 
 

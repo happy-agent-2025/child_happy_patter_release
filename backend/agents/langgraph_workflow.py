@@ -566,7 +566,7 @@ class HappyPartnerGraph:
     def _generate_summary(self, history: List[Dict[str, Any]]) -> str:
         """生成对话摘要"""
         try:
-            from core.openai_client import openai_client
+            from ai_core.openai_client import openai_client
 
             # 构建历史文本
             history_text = ""

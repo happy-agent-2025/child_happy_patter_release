@@ -12,7 +12,7 @@ import asyncio
 from datetime import datetime
 from dataclasses import dataclass, field
 
-from core.openai_client import openai_client
+from ai_core.openai_client import openai_client
 from agents.safety_agent import SafetyAgent
 from agents.emotion_agent import EmotionAgent
 

@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from core.openai_client import openai_client
+from ai_core.openai_client import openai_client
 
 
 class MetaAgent:

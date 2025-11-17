@@ -19,7 +19,7 @@ from config.warnings_config import configure_logging
 configure_logging()
 
 # 导入全局异常处理
-from core.exceptions import setup_exception_handlers
+from ai_core.exceptions import setup_exception_handlers
 
 # 初始化数据库
 from utils.db import init_db

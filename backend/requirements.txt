@@ -44,7 +44,7 @@ pydantic-settings==2.11.0
 python-dotenv==1.1.1
 click==8.1.8
 tqdm==4.67.0
-loguru>=0.7.0
+loguru==0.7.3
 tenacity>=8.0.0
 aiofiles>=24.1.0
 pytest==8.4.1
@@ -64,3 +64,6 @@ setuptools==78.1.1
 wheel==0.45.1
 scalar_fastapi==1.4.3
 uvicorn[standard]
+opuslib_next==1.1.5
+silero-vad==5.1.2
+funasr==1.2.7

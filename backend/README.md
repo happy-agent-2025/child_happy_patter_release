@@ -49,6 +49,23 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # 安装依赖
 pip install -r requirements.txt --user -i https://pypi.tuna.tsinghua.edu.cn/simple/ --trusted-host pypi.tuna.tsinghua.edu.cn
+
+# 1. 添加主通道（main、r、msys2）的清华镜像
+conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
+conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r
+conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/msys2
+
+# 2. 添加 conda-forge 的清华镜像作为一个自定义通道
+conda config --set custom_channels.conda-forge https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+
+# 3. 设置通道的严格优先级（确保按照添加顺序搜索包，main优先于conda-forge）
+conda config --set channel_priority strict
+
+# 4. 清理索引缓存，确保使用最新的镜像信息
+conda clean -i
+
+# 5. 安装 conda-forge::libopus
+conda install conda-forge::libopus -y
 ```
 
 ### 启动服务

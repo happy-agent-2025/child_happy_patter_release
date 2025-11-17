@@ -1,7 +1,7 @@
 import openai
 from config.settings import settings
 from typing import List, Dict, Any, Optional
-from core.ollama_client import ollama_client
+from ai_core.ollama_client import ollama_client
 
 
 class OpenAIClient:

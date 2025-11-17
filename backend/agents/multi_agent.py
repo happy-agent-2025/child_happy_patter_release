@@ -24,8 +24,8 @@ from agents.world_agent import world_agent
 from agents.role_factory import role_factory
 from agents.safety_agent import SafetyAgent
 from agents.emotion_agent import EmotionAgent
-from core.memory.mem0 import story_memory_manager, MemoryType
-from core.openai_client import openai_client
+from ai_core.memory.mem0 import story_memory_manager, MemoryType
+from ai_core.openai_client import openai_client
 # 语音服务引用（保留接口）
 STTService = None
 TTSService = None

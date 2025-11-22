@@ -63,7 +63,7 @@ class SendMessage:
         
         # 问答结束返回
         if not reponse:
-            await SendMessage._send_audio_text(connect, MessageType.TTS.value, MessageState.SENTENCE_END.value, "TTS结束")
+            await SendMessage._send_audio_text(connect, MessageType.TTS.value, MessageState.STOP.value, "TTS结束")
             return
         
         # 发送后端音频开始
@@ -72,21 +72,60 @@ class SendMessage:
         """发送音频消息，主要处理要分段，计算每一段的长度，然后发送"""
         frame_duration = config["hello_message"]["audio_params"]["frame_duration"]
         frame_s = frame_duration / 1000
+        
+        await SendMessage._send_audio_text(connect, MessageType.TTS.value, MessageState.START.value, "TTS结束")
+        # 计算音频总时长
+        total_audio_duration = len(audios) * frame_s
         start_time = time.perf_counter()
         i = 0
 
         # 处理音频数据，每个报数据段开始发送，每段时长为frame_duration
+        timestamp = 0
         for opus_packet in audios:
-            if i >= 2:
+            if i >= 5:
                 expected_end_time = start_time + ((i + 1) * frame_s)
                 current_time = time.perf_counter()
                 remaining_time = expected_end_time - current_time
                 if remaining_time > 0:
                     await asyncio.sleep(remaining_time)
+                    
+                timestamp = int((start_time + i * frame_duration / 1000) * 1000) % (
+                    2**32
+                )
             
             # 发送帧数据
             await connect.websocket.send(opus_packet)
+            # await SendMessage._send_to_websocket_gateway(connect, opus_packet, timestamp, i)
             i += 1
+            
+        # 关键修复：等待音频播放完成
+        elapsed_time = time.perf_counter() - start_time
+        remaining_play_time = total_audio_duration - elapsed_time
+        if remaining_play_time > 0:
+            # 等待剩余的音频播放时间
+            await asyncio.sleep(remaining_play_time)
         
         # 发送后端音频结束
-        await SendMessage._send_audio_text(connect, MessageType.TTS.value, MessageState.SENTENCE_END.value, "TTS结束")
+        await SendMessage._send_audio_text(connect, MessageType.TTS.value, MessageState.STOP.value, "TTS结束")
+    
+    @staticmethod
+    async def _send_to_websocket_gateway(connect, opus_packet, timestamp, sequence):
+        """
+        发送带16字节头部的opus数据包给websocket_gateway
+        Args:
+            conn: 连接对象
+            opus_packet: opus数据包
+            timestamp: 时间戳
+            sequence: 序列号
+        """
+        # 为opus数据包添加16字节头部
+        header = bytearray(16)
+        header[0] = 1  # type
+        header[2:4] = len(opus_packet).to_bytes(2, "big")  # payload length
+        header[4:8] = sequence.to_bytes(4, "big")  # sequence
+        header[8:12] = timestamp.to_bytes(4, "big")  # 时间戳
+        header[12:16] = len(opus_packet).to_bytes(4, "big")  # opus长度
+
+        # 发送包含头部的完整数据包
+        complete_packet = bytes(header) + opus_packet
+        await connect.websocket.send(complete_packet)

@@ -264,3 +264,6 @@ jspm_packages/
 
 # TypeScript cache
 *.tsbuildinfo
+
+backend/ai_core/tts/temp/
+backend/ai_core/asr/tmp/

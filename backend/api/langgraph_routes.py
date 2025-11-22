@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 from agents.multi_agent import multi_agent
 from utils.db.database import get_db
 from utils.db.database_service import DatabaseService
-from models.user import Conversation
+from model.user import Conversation
 from schemas.session import SessionCreateRequest, SessionResponse
 from schemas.chat import ChatRequest, ChatResponse
 

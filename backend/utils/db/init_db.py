@@ -9,8 +9,8 @@ from sqlalchemy.orm import sessionmaker
 from utils.db.database import Base
 from config.settings import Settings
 # 确保所有模型都被导入，这样Base.metadata.create_all才能创建所有表
-from models.user import User, Session, Conversation, ArchivedConversation, SecurityLog
-from models.voiceprint import Voiceprint
+from model.user import User, Session, Conversation, ArchivedConversation, SecurityLog
+from model.voiceprint import Voiceprint
 import logging
 
 # 配置日志

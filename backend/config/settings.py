@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     reload: bool = False
     
     # ota配置
-    websocket_url: str = 'ws://192.168.0.108:3000/ws'
+    websocket_url: str = 'ws://192.168.0.108:3001/ws'
     websocket_token: str =  'zhangxiao_123456'
     websocket_reconnect: int = 50000
     websocket_version: int = 1

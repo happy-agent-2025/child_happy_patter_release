@@ -22,7 +22,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from main import app
 from utils.db.database import Base, get_db
 from utils.db.database_service import DatabaseService
-from models.user import User, Session, Conversation
+from model.user import User, Session, Conversation
 from schemas.chat import ChatRequest
 from schemas.session import SessionCreateRequest
 

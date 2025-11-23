@@ -19,10 +19,10 @@ server:
   token: 'server_AI_Child_1'
   reconnect_interval: 5000
 
-select_model: 
+select_model:
   TTS: "EdgeTTS"
   ASR: "FunASR"
-  LLM: "DeepSeek"
+  LLM: "openai"
   VAD: "Silero"
 
 TTS:

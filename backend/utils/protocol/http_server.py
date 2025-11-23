@@ -11,13 +11,11 @@ import aiohttp
 from aiohttp import web
 import json
 
-from config.settings import settings
-
 
 class HTTPServer:
     """aiohttp HTTP 服务器类"""
 
-    def __init__(self, host: str = "0.0.0.0", port: int = 8080):
+    def __init__(self, config, host: str = "0.0.0.0", port: int = 8080):
         """
         初始化 HTTP 服务器
 
@@ -27,6 +25,7 @@ class HTTPServer:
         """
         self.host = host
         self.port = port
+        self.config = config
         self.app = web.Application()
         self.runner = None
         self.site = None
@@ -99,10 +98,10 @@ class HTTPServer:
                     'tz': 480  # 东八区，单位：分钟
                 },
                 'websocket': {
-                    'url': settings.websocket_url,
-                    'token': settings.websocket_token,
-                    'reconnect': settings.websocket_reconnect,
-                    'version': settings.websocket_version
+                    'url': self.config["server"]["host"],
+                    'token': self.config["server"]["port"],
+                    'reconnect': self.config["server"]["reconnect_interval"],
+                    'version': self.config["server"]["version"]
                 }
             }
             print('OTA响应 (aiohttp):', response_data)
@@ -155,7 +154,7 @@ class HTTPServer:
             print(f"[ERROR] 停止 aiohttp HTTP 服务器失败: {e}")
 
 
-async def create_http_server(host: str = "0.0.0.0", port: int = 8080) -> HTTPServer:
+async def create_http_server(config, host: str = "0.0.0.0", port: int = 8080) -> HTTPServer:
     """
     创建并启动 HTTP 服务器
 
@@ -166,6 +165,6 @@ async def create_http_server(host: str = "0.0.0.0", port: int = 8080) -> HTTPSer
     Returns:
         HTTPServer 实例
     """
-    server = HTTPServer(host, port)
+    server = HTTPServer(config, host, port)
     await server.start()
     return server

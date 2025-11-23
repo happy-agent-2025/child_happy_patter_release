@@ -17,6 +17,7 @@ async def main():
 
     # 启动 HTTP 服务器（OTA 服务）
     http_server = await create_http_server(
+        config,
         host="0.0.0.0",
         port=3000  # 使用 8080 端口，避免与 FastAPI 冲突
     )

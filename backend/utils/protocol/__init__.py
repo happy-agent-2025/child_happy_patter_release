@@ -5,11 +5,9 @@
 
 from .websocket_server import WebSocketServer
 from .http_server import HTTPServer, create_http_server
-from .ota_handler import OTAHandler
 
 __all__ = [
     'WebSocketServer',
     'HTTPServer',
     'create_http_server',
-    'OTAHandler'
 ]

@@ -25,7 +25,7 @@ from agents.role_factory import role_factory
 from agents.safety_agent import SafetyAgent
 from agents.emotion_agent import EmotionAgent
 from ai_core.memory.mem0 import story_memory_manager, MemoryType
-from ai_core.openai_client import openai_client
+from utils.agent_model_manager import agent_model_manager
 # 语音服务引用（保留接口）
 STTService = None
 TTSService = None
@@ -760,8 +760,9 @@ class MultiAgent:
                 {"role": "user", "content": prompt},
             ]
 
-            response = openai_client.chat_completion(
-                messages=messages, temperature=0.7, max_tokens=200
+            response = agent_model_manager.chat_completion(
+                agent_name="multi_agent",
+                messages=messages
             )
 
             return response.strip()

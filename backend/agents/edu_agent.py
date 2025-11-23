@@ -1,6 +1,5 @@
 from typing import Dict, Any
-from ai_core.openai_client import openai_client
-from ai_core.ollama_client import ollama_client
+from utils.agent_model_manager import agent_model_manager
 from utils.util import Util
 
 
@@ -84,17 +83,12 @@ class EduAgent:
             {"role": "user", "content": prompt},
         ]
 
-        # 根据配置选择使用OpenAI还是Ollama
+        # 使用agent_model_manager调用模型
         try:
-            config = Util.get_config()
-            if config.get('use_ollama', False):
-                response = ollama_client.chat_completion(
-                    messages=messages, temperature=0.1, max_tokens=10
-                )
-            else:
-                response = openai_client.chat_completion(
-                    messages=messages, temperature=0.1, max_tokens=10
-                )
+            response = agent_model_manager.chat_completion(
+                agent_name="edu_agent",
+                messages=messages
+            )
             subject = response.strip()
             # 验证返回的学科是否在我们的学科列表中
             if subject in self.subjects:
@@ -215,16 +209,11 @@ class EduAgent:
             {"role": "user", "content": prompt},
         ]
 
-        # 根据配置选择使用OpenAI还是Ollama
-        config = Util.get_config()
-        if config.get('use_ollama', False):
-            response = ollama_client.chat_completion(
-                messages=messages, temperature=0.7, max_tokens=500
-            )
-        else:
-            response = openai_client.chat_completion(
-                messages=messages, temperature=0.7, max_tokens=500
-            )
+        # 使用agent_model_manager调用模型
+        response = agent_model_manager.chat_completion(
+            agent_name="edu_agent",
+            messages=messages
+        )
 
         return response
 

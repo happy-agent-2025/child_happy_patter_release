@@ -1,5 +1,5 @@
 from typing import Dict, Any, List
-from ai_core.openai_client import openai_client
+from utils.agent_model_manager import agent_model_manager
 
 
 class MemoryAgent:
@@ -96,11 +96,10 @@ class MemoryAgent:
             {"role": "user", "content": prompt}
         ]
         
-        # 调用OpenAI API生成摘要
-        response = openai_client.chat_completion(
-            messages=messages,
-            temperature=0.3,
-            max_tokens=150
+        # 使用AgentModelManager调用模型生成摘要
+        response = agent_model_manager.chat_completion(
+            agent_name="memory_agent",
+            messages=messages
         )
         
         return response

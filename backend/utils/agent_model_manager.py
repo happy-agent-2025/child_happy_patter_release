@@ -52,7 +52,7 @@ class AgentModelManager:
 
         # 获取默认配置
         default_config = agents_config.get("default", {
-            "provider": "DeepSeek",
+            "provider": "openai",
             "model": "deepseek-chat",
             "temperature": 0.7,
             "max_tokens": 500
@@ -62,11 +62,24 @@ class AgentModelManager:
         agent_config = agents_config.get(agent_name, default_config)
 
         # 确保配置包含所有必要字段
-        return {
+        base_config = {
             "provider": agent_config.get("provider", default_config["provider"]),
             "model": agent_config.get("model", default_config["model"]),
             "temperature": agent_config.get("temperature", default_config["temperature"]),
             "max_tokens": agent_config.get("max_tokens", default_config["max_tokens"])
+        }
+
+        # 获取provider的完整配置信息
+        provider_name = base_config["provider"]
+        llm_config = self.config.get("LLM", {})
+        provider_config = llm_config.get(provider_name, {})
+
+        # 合并配置，提供完整的LLM调用信息
+        return {
+            **base_config,
+            "api_key": provider_config.get("api_key", ""),
+            "base_url": provider_config.get("base_url", ""),
+            "provider_type": provider_config.get("type", "")
         }
 
     def chat_completion(

@@ -12,7 +12,7 @@ import re
 from datetime import datetime
 from dataclasses import dataclass
 
-from ai_core.openai_client import openai_client
+from utils.agent_model_manager import agent_model_manager
 from agents.safety_agent import SafetyAgent
 
 
@@ -569,8 +569,9 @@ class WorldAgent:
             {"role": "user", "content": prompt},
         ]
 
-        response = openai_client.chat_completion(
-            messages=messages, temperature=0.7, max_tokens=1000
+        response = agent_model_manager.chat_completion(
+            agent_name="world_agent",
+            messages=messages
         )
 
         return response.strip()

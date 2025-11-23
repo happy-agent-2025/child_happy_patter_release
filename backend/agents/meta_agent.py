@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from ai_core.openai_client import openai_client
+from utils.agent_model_manager import agent_model_manager
 
 
 class MetaAgent:
@@ -44,11 +44,10 @@ class MetaAgent:
             {"role": "user", "content": prompt}
         ]
         
-        # 调用OpenAI API进行智能路由
-        response = openai_client.chat_completion(
-            messages=messages,
-            temperature=0.1,  # 使用较低的温度以获得更确定的结果
-            max_tokens=10
+        # 使用AgentModelManager调用模型进行智能路由
+        response = agent_model_manager.chat_completion(
+            agent_name="meta_agent",
+            messages=messages
         )
         
         # 解析响应，提取代理类型

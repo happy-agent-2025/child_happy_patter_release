@@ -1,7 +1,7 @@
 """
 统一的LLM客户端接口
 
-支持多种LLM提供商，包括DeepSeek、Ollama等
+支持多种LLM提供商，包括OpenAI兼容API、Ollama等
 提供统一的调用接口，支持每个agent独立配置
 """
 
@@ -44,13 +44,13 @@ class LLMClient:
         llm_config = self.config.get("LLM", {})
         return llm_config.get(provider, {})
 
-    def _call_deepseek(self, messages: List[Dict[str, str]], model: str, temperature: float, max_tokens: Optional[int]) -> str:
-        """调用DeepSeek API"""
-        provider_config = self._get_provider_config("DeepSeek")
+    def _call_openai(self, messages: List[Dict[str, str]], model: str, temperature: float, max_tokens: Optional[int]) -> str:
+        """调用OpenAI兼容API"""
+        provider_config = self._get_provider_config("openai")
 
         client = openai.OpenAI(
             api_key=provider_config.get("api_key", ""),
-            base_url=provider_config.get("base_url", "https://api.deepseek.com")
+            base_url=provider_config.get("base_url", "")
         )
 
         try:
@@ -62,11 +62,11 @@ class LLMClient:
             )
             return response.choices[0].message.content or ""
         except Exception as e:
-            return f"调用DeepSeek API时出错: {str(e)}"
+            return f"调用OpenAI兼容API时出错: {str(e)}"
 
     def _call_ollama(self, messages: List[Dict[str, str]], model: str, temperature: float, max_tokens: Optional[int]) -> str:
         """调用Ollama API"""
-        provider_config = self._get_provider_config("Ollama")
+        provider_config = self._get_provider_config("ollama")
         base_url = provider_config.get("base_url", "http://localhost:11434")
 
         # 构建prompt
@@ -118,7 +118,7 @@ class LLMClient:
     def chat_completion(
         self,
         messages: List[Dict[str, str]],
-        provider: str = "DeepSeek",
+        provider: str = "openai",
         model: str = "deepseek-chat",
         temperature: float = 0.7,
         max_tokens: Optional[int] = None
@@ -128,7 +128,7 @@ class LLMClient:
 
         Args:
             messages: 消息列表
-            provider: 提供商名称 (DeepSeek, Ollama)
+            provider: 提供商名称 (openai, ollama)
             model: 模型名称
             temperature: 温度参数
             max_tokens: 最大令牌数
@@ -137,9 +137,9 @@ class LLMClient:
             模型回复内容
         """
         try:
-            if provider == "DeepSeek":
-                return self._call_deepseek(messages, model, temperature, max_tokens)
-            elif provider == "Ollama":
+            if provider == "openai":
+                return self._call_openai(messages, model, temperature, max_tokens)
+            elif provider == "ollama":
                 return self._call_ollama(messages, model, temperature, max_tokens)
             else:
                 return f"不支持的LLM提供商: {provider}"

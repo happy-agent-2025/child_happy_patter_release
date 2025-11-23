@@ -11,7 +11,7 @@ import re
 import json
 from datetime import datetime
 
-from ai_core.openai_client import openai_client
+from utils.agent_model_manager import agent_model_manager
 from agents.meta_agent import MetaAgent
 from agents.safety_agent import SafetyAgent
 from agents.emotion_agent import EmotionAgent
@@ -276,10 +276,9 @@ class IntentAgent(MetaAgent):
                 {"role": "user", "content": prompt},
             ]
 
-            response = openai_client.chat_completion(
-                messages=messages,
-                temperature=0.1,  # 降低温度以获得更确定的结果
-                max_tokens=500,
+            response = agent_model_manager.chat_completion(
+                agent_name="intent_agent",
+                messages=messages
             )
 
             # 解析JSON响应

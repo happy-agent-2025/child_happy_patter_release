@@ -12,7 +12,7 @@ import asyncio
 from datetime import datetime
 from dataclasses import dataclass, field
 
-from ai_core.openai_client import openai_client
+from utils.agent_model_manager import agent_model_manager
 from agents.safety_agent import SafetyAgent
 from agents.emotion_agent import EmotionAgent
 
@@ -297,10 +297,9 @@ class RoleAgent:
                 {"role": "user", "content": prompt},
             ]
 
-            response = openai_client.chat_completion(
-                messages=messages,
-                temperature=0.8,  # 稍高的温度增加创造性
-                max_tokens=400,
+            response = agent_model_manager.chat_completion(
+                agent_name="role_agent",
+                messages=messages
             )
 
             return response.strip()
@@ -380,8 +379,9 @@ class RoleAgent:
                 {"role": "user", "content": prompt},
             ]
 
-            response = openai_client.chat_completion(
-                messages=messages, temperature=0.3, max_tokens=50
+            response = agent_model_manager.chat_completion(
+                agent_name="role_agent",
+                messages=messages
             )
 
             learning_point = response.strip()

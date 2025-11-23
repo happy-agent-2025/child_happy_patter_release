@@ -16,7 +16,7 @@ class TestLLMClientImports:
             from ai_core.llm_client import LLMClient
             # 如果导入成功，验证基本方法存在
             assert hasattr(LLMClient, 'chat_completion')
-            assert hasattr(LLMClient, '_call_deepseek')
+            assert hasattr(LLMClient, '_call_openai')
             assert hasattr(LLMClient, '_call_ollama')
         except ImportError as e:
             # 这是预期的失败，符合TDD的红阶段
@@ -224,6 +224,108 @@ class TestCompleteModelCallFlow:
 
         except ImportError as e:
             pytest.fail(f"LLMClient chat_completion签名测试失败: {e}")
+
+# 测试通用provider名称配置
+class TestGenericProviderNames:
+    """测试通用provider名称配置"""
+
+    def test_llm_client_uses_generic_provider_names(self):
+        """测试LLMClient使用通用provider名称"""
+        try:
+            from ai_core.llm_client import LLMClient
+            llm_client = LLMClient()
+
+            # 验证chat_completion方法支持通用provider名称
+            import inspect
+            sig = inspect.signature(llm_client.chat_completion)
+            params = list(sig.parameters.keys())
+            assert 'provider' in params
+
+            # 验证默认provider是通用名称
+            default_provider = sig.parameters['provider'].default
+            assert default_provider in ['openai', 'ollama']
+
+        except ImportError as e:
+            pytest.fail(f"LLMClient通用provider名称测试失败: {e}")
+
+    def test_llm_client_methods_use_generic_names(self):
+        """测试LLMClient方法使用通用名称"""
+        try:
+            from ai_core.llm_client import LLMClient
+            llm_client = LLMClient()
+
+            # 验证方法使用通用名称
+            assert hasattr(llm_client, '_call_openai')
+            assert hasattr(llm_client, '_call_ollama')
+
+            # 验证不再使用特定名称
+            assert not hasattr(llm_client, '_call_deepseek')
+
+        except ImportError as e:
+            pytest.fail(f"LLMClient方法名称测试失败: {e}")
+
+    def test_agent_config_uses_generic_providers(self):
+        """测试agent配置使用通用provider名称"""
+        try:
+            from utils.agent_model_manager import AgentModelManager
+            manager = AgentModelManager()
+
+            # 测试获取agent配置
+            config = manager.get_agent_config("safety_agent")
+
+            # 验证配置使用通用provider名称
+            assert config["provider"] in ['openai', 'ollama']
+
+            # 验证配置包含完整的URL和key信息
+            assert "api_key" in config
+            assert "base_url" in config
+
+        except ImportError as e:
+            pytest.fail(f"agent配置通用provider测试失败: {e}")
+
+    def test_config_yaml_uses_generic_providers(self):
+        """测试config.yaml使用通用provider名称"""
+        try:
+            from utils.util import Util
+            config = Util.get_config()
+
+            # 验证agents配置使用通用provider名称
+            agents_config = config.get("agents", {})
+            default_config = agents_config.get("default", {})
+            safety_config = agents_config.get("safety_agent", {})
+            emotion_config = agents_config.get("emotion_agent", {})
+
+            assert default_config.get("provider") in ['openai', 'ollama']
+            assert safety_config.get("provider") in ['openai', 'ollama']
+            assert emotion_config.get("provider") in ['openai', 'ollama']
+
+            # 验证LLM配置使用通用名称
+            llm_config = config.get("LLM", {})
+            assert "openai" in llm_config
+            assert "ollama" in llm_config
+
+        except Exception as e:
+            pytest.fail(f"config.yaml通用provider测试失败: {e}")
+
+    def test_llm_client_no_hardcoded_urls(self):
+        """测试LLMClient没有硬编码URL"""
+        try:
+            from ai_core.llm_client import LLMClient
+            llm_client = LLMClient()
+
+            # 验证_call_openai方法没有硬编码URL
+            import inspect
+            source = inspect.getsource(llm_client._call_openai)
+
+            # 检查没有硬编码的DeepSeek URL
+            assert "https://api.deepseek.com" not in source
+
+            # 检查使用配置获取URL
+            assert "provider_config.get" in source
+            assert "base_url" in source
+
+        except ImportError as e:
+            pytest.fail(f"LLMClient硬编码URL测试失败: {e}")
 
 # 运行所有测试
 if __name__ == "__main__":

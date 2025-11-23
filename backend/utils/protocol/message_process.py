@@ -10,6 +10,38 @@ from utils.protocol.send_message import SendMessage
 from utils.Dialogue import Dialogue
 from utils.logger import Logger
 
+# 导入agents系统
+from agents.langgraph_workflow import happy_partner_graph
+
+# 性能优化：简单的响应缓存
+class ResponseCache:
+    """响应缓存类"""
+    def __init__(self, max_size=100):
+        self.cache = {}
+        self.max_size = max_size
+        self.access_count = {}
+
+    def get(self, key: str) -> str:
+        """获取缓存响应"""
+        if key in self.cache:
+            self.access_count[key] = self.access_count.get(key, 0) + 1
+            return self.cache[key]
+        return None
+
+    def set(self, key: str, value: str):
+        """设置缓存响应"""
+        if len(self.cache) >= self.max_size:
+            # 移除最少使用的缓存项
+            if self.access_count:
+                min_key = min(self.access_count, key=self.access_count.get)
+                del self.cache[min_key]
+                del self.access_count[min_key]
+        self.cache[key] = value
+        self.access_count[key] = 1
+
+# 全局缓存实例
+_response_cache = ResponseCache()
+
 TAG = __name__
 
 class MessageProcess:
@@ -73,8 +105,60 @@ class MessageProcess:
         return cleaned == text  # 如果只剩标点，返回 True
     
     # 开始处理音频数据，并把消息返回给客户端
+    async def _process_with_agents(self, user_text: str) -> str:
+        """使用agents系统处理用户消息"""
+        try:
+            # 检查缓存
+            cache_key = f"{user_text}"  # 简单的文本作为缓存键
+            cached_response = _response_cache.get(cache_key)
+            if cached_response:
+                self.logger.info(f"从缓存获取响应，长度: {len(cached_response)} 字符")
+                return cached_response
+
+            # 使用LangGraph工作流处理消息
+            user_id = getattr(self.connect, 'user_id', 'default_user')
+            session_id = getattr(self.connect, 'session_id', str(uuid.uuid4()))
+
+            self.logger.info(f"开始Agents系统处理 - 用户ID: {user_id}, 会话ID: {session_id}")
+
+            result = await happy_partner_graph.process_message(
+                user_id=user_id,
+                content=user_text,
+                session_id=session_id
+            )
+
+            response = result.get("response", "抱歉，我无法回答这个问题。")
+            self.logger.info(f"Agents系统处理完成，响应长度: {len(response)} 字符")
+
+            # 缓存响应
+            _response_cache.set(cache_key, response)
+
+            return response
+
+        except asyncio.TimeoutError:
+            self.logger.error("Agents系统处理超时")
+            return self._fallback_to_llm(user_text)
+        except Exception as e:
+            self.logger.error(f"Agents系统处理失败: {e}")
+            # 降级到原有LLM调用
+            return self._fallback_to_llm(user_text)
+
+    def _fallback_to_llm(self, user_text: str) -> str:
+        """降级到原有LLM调用"""
+        try:
+            self.dialogue.put_user(user_text)
+            response = self.ai.llm.generate_response(self.dialogue.get_dialogue(), self.connect.session_id)
+            assistant_text = ''
+            for chunk in response:
+                assistant_text += chunk
+            self.dialogue.put_assistant(assistant_text)
+            return assistant_text
+        except Exception as e:
+            self.logger.error(f"LLM降级处理失败: {e}")
+            return "抱歉，系统暂时无法处理您的请求。"
+
     def start_chat(self, message):
-        """开始聊天"""
+        """开始聊天 - 集成agents系统"""
         if isinstance(message, str):
             self.text = message
         else:
@@ -87,6 +171,8 @@ class MessageProcess:
                 self.is_processing = False
                 return
             self.logger.info(f"识别结果: {self.text}")
+
+        # 发送用户文本到前端
         try:
             future = asyncio.run_coroutine_threadsafe(
                 SendMessage._send_stt_text(self.connect, self.text),
@@ -96,42 +182,49 @@ class MessageProcess:
         except Exception as e:
             self.logger.error(f"websocket 发送异常{e}")
 
-        self.dialogue.put_user(self.text)
-        # self.logger.info(f"对话记录: {self.dialogue.get_dialogue()}")
-        response = self.ai.llm.generate_response(self.dialogue.get_dialogue(), self.connect.session_id)
-        text_buffer = []
-        assistant_text = ''
+        # 使用agents系统处理消息
+        try:
+            # 在现有线程池中运行异步的agents处理
+            future = asyncio.run_coroutine_threadsafe(
+                self._process_with_agents(self.text),
+                self.connect.loop
+            )
+            assistant_text = future.result(timeout=30)  # 设置30秒超时
+        except Exception as e:
+            self.logger.error(f"Agents系统处理超时或失败: {e}")
+            # 降级到原有LLM调用
+            assistant_text = self._fallback_to_llm(self.text)
+
+        # 处理响应文本流式输出
+        text_buffer = [assistant_text]
         iot_msg = None
-        for chunk in response:  # 必须迭代生成器才能执行函数体内的代码
-            text_buffer.append(chunk)
-            text_buffer, complete_sentence = self.get_complete_sentence(text_buffer)
-            if len(complete_sentence) > 0:
-                if "{" in complete_sentence:
-                    self.logger.info(f"JSON数据: {complete_sentence}")
-                    iot_msg = complete_sentence
-                    assistant_text = assistant_text + complete_sentence
-                else:
-                    assistant_text = assistant_text + complete_sentence
-                    self.logger.info(f"完整的句子: {complete_sentence}")
-                    future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, complete_sentence)
-                    self.connect.audio_send_queue.put(future)
+        text_buffer, complete_sentence = self.get_complete_sentence(text_buffer)
+        if len(complete_sentence) > 0:
+            if "{" in complete_sentence:
+                self.logger.info(f"JSON数据: {complete_sentence}")
+                iot_msg = complete_sentence
+            else:
+                self.logger.info(f"完整的句子: {complete_sentence}")
+                future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, complete_sentence)
+                self.connect.audio_send_queue.put(future)
+
         if len(text_buffer) > 0:
             remaining_text = ''.join(text_buffer)
             if len(remaining_text) > 0:
                 if "{" in remaining_text:
                     iot_msg = remaining_text
                     self.logger.info(f"JSON数据: {remaining_text}")
-                    assistant_text = assistant_text + remaining_text
                 else:
-                    assistant_text = assistant_text + remaining_text
                     # self.logger.info(f"剩余的句子: {remaining_text}")
                     future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, remaining_text)
                     self.connect.audio_send_queue.put(future)
 
-        self.dialogue.put_assistant(assistant_text)
+        # 发送结束标记
         future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, None)
         self.connect.audio_send_queue.put(future)
         self.is_processing = False
+
+        # 处理IoT消息
         if iot_msg is not None:
             try:
                 future = asyncio.run_coroutine_threadsafe(

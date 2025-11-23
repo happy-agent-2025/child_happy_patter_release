@@ -190,6 +190,30 @@ backend/
 - Configuration uses YAML format with environment-specific settings
 
 ## Development Guidelines
+
+### Test-Driven Development (TDD) Requirements
+
+**严格TDD模式**:
+1. **测试先行**: 每次开发新功能或模块前，必须先编写测试用例
+2. **真实测试**: 测试用例必须真实测试接口功能，禁止使用mock方式
+3. **红-绿-重构**: 严格遵循TDD流程：
+   - 红：编写测试用例并运行（应该失败）
+   - 绿：编写最小实现使测试通过
+   - 重构：优化代码结构，保持测试通过
+4. **接口验证**: 测试必须验证实际接口功能，包括：
+   - 数据库连接和操作
+   - API调用和响应
+   - 文件读写操作
+   - 网络通信
+   - 业务逻辑处理
+
+**测试质量要求**:
+- 测试用例必须覆盖所有主要功能路径
+- 测试必须验证真实接口调用，而不是模拟结果
+- 测试必须包含错误场景和边界条件
+- 测试必须可重复执行，结果一致
+
+### Git Commit Guidelines
 - After completing a phase of functionality and passing the unit tests, it must be committed to the local repository using git
 - The principles of single responsibility, low coupling, and high cohesion must be strictly maintained in functions
 - Before starting feature development, a detailed plan must be submitted for my review and confirmation. Actual development may only begin after approval is granted

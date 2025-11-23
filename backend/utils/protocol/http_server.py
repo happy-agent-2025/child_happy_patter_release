@@ -98,8 +98,8 @@ class HTTPServer:
                     'tz': 480  # 东八区，单位：分钟
                 },
                 'websocket': {
-                    'url': self.config["server"]["host"],
-                    'token': self.config["server"]["port"],
+                    'url': self.config["server"]["websocket_url"],
+                    'token': self.config["server"]["token"],
                     'reconnect': self.config["server"]["reconnect_interval"],
                     'version': self.config["server"]["version"]
                 }

@@ -26,13 +26,91 @@ This is the backend for "Happy Partner" - a children's education AI system that 
 
 ### Multi-Agent System
 
-The system uses a LangGraph-based multi-agent architecture:
-- **Role Agent**: Manages character roles and personalities
-- **World Agent**: Handles world state and context
-- **Memory Agent**: Manages conversation memory using Mem0
-- **Safety Agent**: Ensures content safety and appropriateness
-- **Emotion Agent**: Detects and responds to emotional cues
-- **Intent Agent**: Classifies user intent
+The system uses a sophisticated LangGraph-based multi-agent architecture with two main workflows:
+
+#### LangGraph Workflow (`agents/langgraph_workflow.py`)
+A comprehensive state-based workflow that manages the complete conversation lifecycle:
+- **State Management**: Uses `AgentState` TypedDict to track conversation state
+- **Node-based Processing**: Sequential processing through specialized nodes
+- **Conditional Routing**: Dynamic routing based on intent and safety checks
+- **Memory Integration**: Real-time memory updates and context enrichment
+
+**Key Nodes in Workflow:**
+- `input_processing`: Input validation and initialization
+- `context_enrichment`: Intelligent context injection and user profile building
+- `safety_check`: Two-layer safety filtering (keyword + AI analysis)
+- `intent_analysis`: Intent classification using MetaAgent
+- `route_agent`: Dynamic agent routing based on intent
+- `edu_agent`: Educational content processing
+- `emotion_agent`: Emotional interaction handling
+- `memory_update`: LangGraph memory management
+- `context_summary`: Periodic conversation summarization
+
+#### Multi-Agent State Graph (`agents/multi_agent.py`)
+A more complex state graph supporting multiple interaction modes:
+- **Interaction Modes**: Chat mode vs Story mode
+- **Voice Integration**: Support for voice input/output processing
+- **Story Sessions**: Complete story world and role management
+- **Memory Persistence**: Integration with Mem0 memory system
+
+**Specialized Agents:**
+- **Role Agent** (`agents/role_agent.py`): Character role-playing with personality consistency, emotion expression, and educational value extraction
+- **Intent Agent** (`agents/intent_agent.py`): Enhanced intent recognition with wake-up word detection, keyword analysis, and AI-powered classification
+- **Safety Agent** (`agents/safety_agent.py`): Two-layer content filtering (keyword pre-filter + AI analysis) with child-friendly safety guidelines
+- **Memory Agent** (`agents/memory_agent.py`): Conversation history management with automatic summarization and context retrieval
+- **Emotion Agent**: Emotional state detection and appropriate response generation
+- **World Agent**: Story world creation and management
+- **Chapter Manager**: Story progression and chapter management
+
+## Agent System Technologies
+
+### Core Technologies
+
+**LangGraph Framework**:
+- **State Graphs**: TypedDict-based state management with type safety
+- **Conditional Edges**: Dynamic routing based on state conditions
+- **Node Composition**: Modular node design for specialized processing
+- **Asynchronous Processing**: Full async/await support for I/O operations
+
+**Memory Management**:
+- **Mem0 Integration**: Persistent memory storage for user profiles and conversation history
+- **Context Enrichment**: Intelligent context injection based on conversation history
+- **User Profiling**: Dynamic user profile building from interaction patterns
+- **Conversation Summarization**: Automatic summarization of long conversations
+
+**Safety and Content Filtering**:
+- **Two-Layer Filtering**: Keyword pre-filter + AI-powered content analysis
+- **Child-Friendly Guidelines**: Comprehensive safety guidelines for children's content
+- **Real-time Filtering**: Immediate content validation during conversation flow
+
+**Intent Recognition**:
+- **Multi-Modal Analysis**: Keyword matching + AI classification + entity extraction
+- **Wake-up Word Detection**: Support for voice activation and mode switching
+- **Emotion Integration**: Emotional context consideration in intent analysis
+
+**Role-Playing System**:
+- **Character Consistency**: Personality and background consistency maintenance
+- **Emotional Expression**: Dynamic emotional state management for characters
+- **Educational Value**: Automatic extraction of learning points from interactions
+- **Story Progression**: Chapter-based story management and progression
+
+### Design Patterns
+
+**Factory Pattern**:
+- `AIFactory` for AI component creation (ASR, TTS, LLM, VAD)
+- `RoleFactory` for dynamic role agent creation
+
+**State Pattern**:
+- `AgentState` for conversation state management
+- `GraphState` for multi-agent workflow state
+
+**Observer Pattern**:
+- Memory updates trigger context enrichment
+- Safety checks trigger content filtering
+
+**Strategy Pattern**:
+- Different processing strategies for chat vs story modes
+- Multiple intent classification strategies
 
 ## Development Commands
 
@@ -112,10 +190,32 @@ backend/
 - Configuration uses YAML format with environment-specific settings
 
 ## Development Guidelines
+- After completing a phase of functionality and passing the unit tests, it must be committed to the local repository using git
+- The principles of single responsibility, low coupling, and high cohesion must be strictly maintained in functions
+- Before starting feature development, a detailed plan must be submitted for my review and confirmation. Actual development may only begin after approval is granted
 
+### General Guidelines
 - Use async/await for all I/O operations
 - Follow the factory pattern for AI component creation
 - Implement proper resource cleanup in connection handlers
 - Use the logger utility for consistent logging
 - Maintain separation between protocol handling and AI processing
+
+### Agent System Guidelines
 - Use the `langgraph` package for LangGraph-based multi-agent system
+- Define clear state schemas using TypedDict for type safety
+- Implement proper error handling in all agent nodes
+- Use conditional edges for dynamic routing based on state
+- Maintain agent state consistency across the workflow
+- Implement memory persistence for long-term context
+- Follow the two-layer safety filtering approach (keyword + AI)
+- Use factory patterns for dynamic agent creation
+- Implement proper locking for thread-safe agent operations
+- Provide comprehensive metadata in agent responses
+
+### Testing Guidelines
+- Test individual agent nodes in isolation
+- Test complete workflow execution paths
+- Test error conditions and recovery mechanisms
+- Test memory persistence and context retrieval
+- Test safety filtering with various input types

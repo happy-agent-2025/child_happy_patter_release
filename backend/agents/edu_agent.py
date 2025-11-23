@@ -1,7 +1,7 @@
 from typing import Dict, Any
 from ai_core.openai_client import openai_client
 from ai_core.ollama_client import ollama_client
-from config.settings import settings
+from utils.util import Util
 
 
 class EduAgent:
@@ -86,7 +86,8 @@ class EduAgent:
 
         # 根据配置选择使用OpenAI还是Ollama
         try:
-            if settings.use_ollama:
+            config = Util.get_config()
+            if config.get('use_ollama', False):
                 response = ollama_client.chat_completion(
                     messages=messages, temperature=0.1, max_tokens=10
                 )
@@ -215,7 +216,8 @@ class EduAgent:
         ]
 
         # 根据配置选择使用OpenAI还是Ollama
-        if settings.use_ollama:
+        config = Util.get_config()
+        if config.get('use_ollama', False):
             response = ollama_client.chat_completion(
                 messages=messages, temperature=0.7, max_tokens=500
             )

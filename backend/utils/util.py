@@ -73,13 +73,22 @@ class Util:
         global _config_cache # 使用全局变量缓存
         if _config_cache is not None:
             return _config_cache
-        
-        parser = argparse.ArgumentParser(description="Server configuration")
-        config_file = Util.get_config_file_path()
-        parser.add_argument("--config_path", type=str, default=config_file)
-        args = parser.parse_args()
-        print(f"Loading configuration from {args.config_path}")
-        with open(args.config_path, "r", encoding="utf-8") as file:
+
+        # 在测试环境中避免解析命令行参数
+        import sys
+        if 'pytest' in sys.modules or 'unittest' in sys.modules:
+            # 测试环境中直接使用默认配置路径
+            config_file = Util.get_config_file_path()
+        else:
+            # 生产环境中解析命令行参数
+            parser = argparse.ArgumentParser(description="Server configuration")
+            config_file = Util.get_config_file_path()
+            parser.add_argument("--config_path", type=str, default=config_file)
+            args = parser.parse_args()
+            config_file = args.config_path
+
+        print(f"Loading configuration from {config_file}")
+        with open(config_file, "r", encoding="utf-8") as file:
             config = yaml.safe_load(file)
         # 初始化目录
         Util.init_output_dirs(config)

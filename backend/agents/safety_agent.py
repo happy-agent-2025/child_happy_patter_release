@@ -1,5 +1,5 @@
 from typing import Dict, Any, List
-from ai_core.openai_client import openai_client
+from utils.agent_model_manager import agent_model_manager
 import re
 
 
@@ -106,11 +106,10 @@ class SafetyAgent:
             {"role": "user", "content": prompt}
         ]
 
-        # 调用OpenAI API进行内容安全审查
-        response = openai_client.chat_completion(
-            messages=messages,
-            temperature=0.3,
-            max_tokens=300
+        # 使用AgentModelManager调用模型进行内容安全审查
+        response = agent_model_manager.chat_completion(
+            agent_name="safety_agent",
+            messages=messages
         )
 
         # 解析响应

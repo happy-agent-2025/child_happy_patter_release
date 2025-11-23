@@ -12,7 +12,7 @@ hello_message:
 prompt: "不要回复表情"
 
 server:
-  port: 3000
+  port: 3001
   host: 0.0.0.0
 
 select_model: 

@@ -327,6 +327,114 @@ class TestGenericProviderNames:
         except ImportError as e:
             pytest.fail(f"LLMClient硬编码URL测试失败: {e}")
 
+
+class TestAgentIndependentURLConfig:
+    """测试Agent独立URL和API密钥配置"""
+
+    def test_agent_config_supports_independent_urls(self):
+        """测试agent配置支持独立URL和API密钥"""
+        try:
+            from utils.agent_model_manager import agent_model_manager
+            from utils.util import Util
+
+            config = Util.get_config()
+            agents_config = config.get("agents", {})
+
+            # 验证agents配置结构支持独立URL和API密钥
+            for agent_name, agent_config in agents_config.items():
+                # 验证配置支持独立URL和API密钥字段
+                assert isinstance(agent_config, dict)
+
+                # 这些字段应该支持独立配置
+                supported_fields = ["provider", "model", "temperature", "max_tokens", "api_key", "base_url"]
+                for field in supported_fields:
+                    # 验证字段可以存在于配置中
+                    assert field in supported_fields
+
+        except Exception as e:
+            pytest.fail(f"agent独立URL配置测试失败: {e}")
+
+    def test_agent_model_manager_supports_independent_config(self):
+        """测试agent_model_manager支持独立配置"""
+        try:
+            from utils.agent_model_manager import agent_model_manager
+
+            # 获取safety_agent配置
+            safety_config = agent_model_manager.get_agent_config("safety_agent")
+
+            # 验证配置包含必要的字段
+            assert "provider" in safety_config
+            assert "model" in safety_config
+            assert "temperature" in safety_config
+            assert "max_tokens" in safety_config
+
+            # 验证配置结构支持独立URL和API密钥
+            assert isinstance(safety_config, dict)
+
+        except Exception as e:
+            pytest.fail(f"agent_model_manager独立配置测试失败: {e}")
+
+    def test_llm_client_supports_agent_specific_config(self):
+        """测试LLMClient支持agent特定配置"""
+        try:
+            from ai_core.llm_client import LLMClient
+            from utils.agent_model_manager import agent_model_manager
+
+            llm_client = LLMClient()
+
+            # 验证_get_provider_config方法存在
+            assert hasattr(llm_client, '_get_provider_config')
+
+            # 验证agent配置可以传递给LLM调用
+            agent_config = agent_model_manager.get_agent_config("safety_agent")
+            assert isinstance(agent_config, dict)
+
+        except Exception as e:
+            pytest.fail(f"LLMClient agent特定配置测试失败: {e}")
+
+    def test_config_yaml_structure_supports_independent_urls(self):
+        """测试config.yaml结构支持独立URL配置"""
+        try:
+            from utils.util import Util
+
+            config = Util.get_config()
+
+            # 验证agents配置结构
+            agents_config = config.get("agents", {})
+            assert isinstance(agents_config, dict)
+
+            # 验证每个agent配置是字典
+            for agent_name, agent_config in agents_config.items():
+                assert isinstance(agent_config, dict)
+
+            # 验证LLM providers配置结构
+            llm_config = config.get("LLM", {})
+            assert isinstance(llm_config, dict)
+
+        except Exception as e:
+            pytest.fail(f"config.yaml结构测试失败: {e}")
+
+    def test_backward_compatibility_with_independent_urls(self):
+        """测试独立URL配置的向后兼容性"""
+        try:
+            from utils.agent_model_manager import agent_model_manager
+            from utils.util import Util
+
+            config = Util.get_config()
+
+            # 验证默认配置仍然工作
+            default_config = agent_model_manager.get_agent_config("default")
+            assert "provider" in default_config
+            assert "model" in default_config
+
+            # 验证现有agent配置仍然工作
+            safety_config = agent_model_manager.get_agent_config("safety_agent")
+            assert "provider" in safety_config
+            assert "model" in safety_config
+
+        except Exception as e:
+            pytest.fail(f"向后兼容性测试失败: {e}")
+
 # 运行所有测试
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

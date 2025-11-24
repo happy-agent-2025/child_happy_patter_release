@@ -74,11 +74,15 @@ class AgentModelManager:
         llm_config = self.config.get("LLM", {})
         provider_config = llm_config.get(provider_name, {})
 
+        # 优先使用agent特定的URL和API密钥，如果没有则使用provider默认配置
+        agent_specific_api_key = agent_config.get("api_key")
+        agent_specific_base_url = agent_config.get("base_url")
+
         # 合并配置，提供完整的LLM调用信息
         return {
             **base_config,
-            "api_key": provider_config.get("api_key", ""),
-            "base_url": provider_config.get("base_url", ""),
+            "api_key": agent_specific_api_key if agent_specific_api_key is not None else provider_config.get("api_key", ""),
+            "base_url": agent_specific_base_url if agent_specific_base_url is not None else provider_config.get("base_url", ""),
             "provider_type": provider_config.get("type", "")
         }
 
@@ -106,7 +110,9 @@ class AgentModelManager:
             provider=agent_config["provider"],
             model=agent_config["model"],
             temperature=agent_config["temperature"],
-            max_tokens=agent_config["max_tokens"]
+            max_tokens=agent_config["max_tokens"],
+            api_key=agent_config.get("api_key"),
+            base_url=agent_config.get("base_url")
         )
 
 

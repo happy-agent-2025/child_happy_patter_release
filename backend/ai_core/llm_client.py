@@ -44,13 +44,25 @@ class LLMClient:
         llm_config = self.config.get("LLM", {})
         return llm_config.get(provider, {})
 
-    def _call_openai(self, messages: List[Dict[str, str]], model: str, temperature: float, max_tokens: Optional[int]) -> str:
+    def _call_openai(
+        self,
+        messages: List[Dict[str, str]],
+        model: str,
+        temperature: float,
+        max_tokens: Optional[int],
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None
+    ) -> str:
         """调用OpenAI兼容API"""
         provider_config = self._get_provider_config("openai")
 
+        # 优先使用agent特定的配置，如果没有则使用provider默认配置
+        final_api_key = api_key if api_key is not None else provider_config.get("api_key", "")
+        final_base_url = base_url if base_url is not None else provider_config.get("base_url", "")
+
         client = openai.OpenAI(
-            api_key=provider_config.get("api_key", ""),
-            base_url=provider_config.get("base_url", "")
+            api_key=final_api_key,
+            base_url=final_base_url
         )
 
         try:
@@ -64,10 +76,18 @@ class LLMClient:
         except Exception as e:
             return f"调用OpenAI兼容API时出错: {str(e)}"
 
-    def _call_ollama(self, messages: List[Dict[str, str]], model: str, temperature: float, max_tokens: Optional[int]) -> str:
+    def _call_ollama(
+        self,
+        messages: List[Dict[str, str]],
+        model: str,
+        temperature: float,
+        max_tokens: Optional[int],
+        base_url: Optional[str] = None
+    ) -> str:
         """调用Ollama API"""
         provider_config = self._get_provider_config("ollama")
-        base_url = provider_config.get("base_url", "http://localhost:11434")
+        # 优先使用agent特定的配置，如果没有则使用provider默认配置
+        final_base_url = base_url if base_url is not None else provider_config.get("base_url", "http://localhost:11434")
 
         # 构建prompt
         prompt = ""
@@ -106,7 +126,7 @@ class LLMClient:
             data['options']['num_predict'] = max_tokens
 
         try:
-            url = f"{base_url}/api/generate"
+            url = f"{final_base_url}/api/generate"
             headers = {'Content-Type': 'application/json'}
             response = requests.post(url, json=data, headers=headers, timeout=60)
             response.raise_for_status()
@@ -121,7 +141,9 @@ class LLMClient:
         provider: str = "openai",
         model: str = "deepseek-chat",
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None
+        max_tokens: Optional[int] = None,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None
     ) -> str:
         """
         统一的聊天补全接口
@@ -132,15 +154,17 @@ class LLMClient:
             model: 模型名称
             temperature: 温度参数
             max_tokens: 最大令牌数
+            api_key: 可选的API密钥（优先于provider配置）
+            base_url: 可选的API基础URL（优先于provider配置）
 
         Returns:
             模型回复内容
         """
         try:
             if provider == "openai":
-                return self._call_openai(messages, model, temperature, max_tokens)
+                return self._call_openai(messages, model, temperature, max_tokens, api_key, base_url)
             elif provider == "ollama":
-                return self._call_ollama(messages, model, temperature, max_tokens)
+                return self._call_ollama(messages, model, temperature, max_tokens, base_url)
             else:
                 return f"不支持的LLM提供商: {provider}"
         except Exception as e:

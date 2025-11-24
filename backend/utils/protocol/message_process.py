@@ -9,6 +9,7 @@ from utils.protocol.messge_type import MessageState, MessageType
 from utils.protocol.send_message import SendMessage
 from utils.Dialogue import Dialogue
 from utils.logger import Logger
+from utils.sentence_splitter import SmartSentenceSplitter
 
 # 导入agents系统
 from agents.langgraph_workflow import happy_partner_graph
@@ -57,6 +58,7 @@ class MessageProcess:
         self.dialogue = Dialogue()
         self.vad = self.ai.vad
         self.is_processing = False
+        self.sentence_splitter = SmartSentenceSplitter()
         
     async def process_message(self, message):
         """消息路由"""
@@ -238,81 +240,16 @@ class MessageProcess:
 
     # 获取完整的句子
     def get_complete_sentence(self, text_buffer: list):
-        sentence_end_chars = {'。', '！', '？', '!', '?'}  # 不包含 .，避免数字误判
-        buffer_str = "".join(text_buffer)
-        
-        # 1. 检查是否出现 JSON 结构（[...] 或 {...}）
-        json_start_chars = {'{', '['}
-        json_end_chars = {'}', ']'}
-        json_pairs = {'{': '}', '[': ']'}
+        """
+        使用智能分句器从文本缓冲区中获取完整的句子
 
-        # 查找第一个出现的 JSON 开始字符
-        start_pos = -1
-        start_char = None
-        for i, char in enumerate(buffer_str):
-            if char in json_start_chars:
-                start_pos = i
-                start_char = char
-                break
+        Args:
+            text_buffer: 文本缓冲区列表
 
-        if start_pos >= 0 and start_char is not None:
-            # 尝试找到匹配的结束字符
-            stack = []
-            end_char = json_pairs[start_char]
-            for i, char in enumerate(buffer_str[start_pos:]):
-                if char == start_char:
-                    stack.append(i)
-                elif char == end_char:
-                    if stack:
-                        stack.pop()
-                        if not stack:  # 匹配到最外层的结束字符
-                            end_pos = start_pos + i
-                            # 返回开始字符之前的部分（按句子分割） + 整个 JSON
-                            # 先检查开始字符之前是否有句子结束符
-                            prefix = buffer_str[:start_pos]
-                            json_part = buffer_str[start_pos:end_pos + 1]
-
-                            # 处理开始字符之前的部分，处理json之前的句子
-                            prefix_positions = []
-                            for char in sentence_end_chars:
-                                pos = prefix.rfind(char)
-                                if pos > -1:
-                                    prefix_positions.append(pos)
-
-                            if prefix_positions:
-                                last_prefix_pos = max(prefix_positions)
-                                complete_sentence = prefix[:last_prefix_pos + 1] # 把最后的标点符号加上
-                                remaining_prefix = prefix[last_prefix_pos + 1:] + json_part
-                                text_buffer = [remaining_prefix] if remaining_prefix else []
-                                return text_buffer, complete_sentence
-                            else:
-                                # 如果开始字符之前没有句子结束符，返回整个 JSON
-                                # 走到这里，表示前面没有句子了，直接返回整个 JSON
-                                # text_buffer每次返回的是剩余的文本内容
-                                complete_sentence = json_part
-                                remaining_text = buffer_str[end_pos + 1:]
-                                text_buffer = [remaining_text] if remaining_text else []
-                                return text_buffer, complete_sentence
-            # 如果没找到匹配的结束字符，等待更多数据
-            return text_buffer, ""
-
-        # 2. 如果没有 JSON，按原来的句子分割逻辑处理
-        positions = []
-        for char in sentence_end_chars:
-            pos = buffer_str.rfind(char)
-            if pos > -1:
-                positions.append(pos)
-
-        if positions:
-            last_pos = max(positions)
-            complete_sentence = buffer_str[:last_pos + 1]
-            remaining_text = buffer_str[last_pos + 1:]
-            text_buffer = [remaining_text] if remaining_text else []
-        else:
-            complete_sentence = ""
-            text_buffer = [buffer_str]
-
-        return text_buffer, complete_sentence
+        Returns:
+            tuple: (remaining_buffer, complete_sentence)
+        """
+        return self.sentence_splitter.get_complete_sentence(text_buffer)
     async def text_message(self, message):
         """处理文本消息"""
         self.logger.info("接收到文本消息: " + message)

@@ -59,6 +59,10 @@ class MessageProcess:
         self.vad = self.ai.vad
         self.is_processing = False
         self.sentence_splitter = SmartSentenceSplitter()
+
+        # 音频传输状态管理
+        self.is_audio_transmitting = False  # 音频传输状态标志
+        self.audio_transmission_lock = asyncio.Lock()  # 音频传输锁
         
     async def process_message(self, message):
         """消息路由"""
@@ -72,8 +76,10 @@ class MessageProcess:
     # 将音频数据缓存下来，后面开始进行opus解码并转成文字
     async def bytes_message(self, message):
         """处理二进制消息"""
-        if self.is_processing:
-            return        
+        # 检查是否正在处理或音频传输中
+        if self.is_processing or self.is_audio_transmitting:
+            self.logger.debug("系统繁忙，跳过当前音频处理")
+            return
         
         # is_no_speech表示没有说话，表示一句话结束，is_has_speech表示有说话
         is_no_speech, is_has_speech = self.vad.is_no_speech(self.connect, message)
@@ -200,31 +206,44 @@ class MessageProcess:
         # 处理响应文本流式输出
         text_buffer = [assistant_text]
         iot_msg = None
-        text_buffer, complete_sentence = self.get_complete_sentence(text_buffer)
-        if len(complete_sentence) > 0:
-            if "{" in complete_sentence:
-                self.logger.info(f"JSON数据: {complete_sentence}")
-                iot_msg = complete_sentence
-            else:
-                self.logger.info(f"完整的句子: {complete_sentence}")
-                future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, complete_sentence)
-                self.connect.audio_send_queue.put(future)
 
-        if len(text_buffer) > 0:
-            remaining_text = ''.join(text_buffer)
-            if len(remaining_text) > 0:
-                if "{" in remaining_text:
-                    iot_msg = remaining_text
-                    self.logger.info(f"JSON数据: {remaining_text}")
+        # 设置音频传输状态
+        self.is_audio_transmitting = True
+
+        try:
+            text_buffer, complete_sentence = self.get_complete_sentence(text_buffer)
+            if len(complete_sentence) > 0:
+                if "{" in complete_sentence:
+                    self.logger.info(f"JSON数据: {complete_sentence}")
+                    iot_msg = complete_sentence
                 else:
-                    # self.logger.info(f"剩余的句子: {remaining_text}")
-                    future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, remaining_text)
+                    self.logger.info(f"完整的句子: {complete_sentence}")
+                    future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, complete_sentence)
                     self.connect.audio_send_queue.put(future)
 
-        # 发送结束标记
-        future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, None)
-        self.connect.audio_send_queue.put(future)
-        self.is_processing = False
+            if len(text_buffer) > 0:
+                remaining_text = ''.join(text_buffer)
+                if len(remaining_text) > 0:
+                    if "{" in remaining_text:
+                        iot_msg = remaining_text
+                        self.logger.info(f"JSON数据: {remaining_text}")
+                    else:
+                        # self.logger.info(f"剩余的句子: {remaining_text}")
+                        future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, remaining_text)
+                        self.connect.audio_send_queue.put(future)
+
+            # 发送结束标记
+            future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, None)
+            self.connect.audio_send_queue.put(future)
+
+            # 等待音频队列处理完成（简单延迟，实际应该更智能）
+            import time
+            time.sleep(2)  # 等待2秒让音频开始传输
+
+        finally:
+            # 确保状态被正确重置
+            self.is_processing = False
+            self.is_audio_transmitting = False
 
         # 处理IoT消息
         if iot_msg is not None:
@@ -263,7 +282,11 @@ class MessageProcess:
                     # 处理前端过来的消息，前端连接之后，发文本消息到后端进行处理
                     if "text" in msg_json:
                         text = msg_json["text"]
-                        self.connect.connect_thread_pool.submit(self.start_chat, text) # 提交任务，发送语音消息
+                        # 检查是否正在处理或音频传输中
+                        if not (self.is_processing or self.is_audio_transmitting):
+                            self.connect.connect_thread_pool.submit(self.start_chat, text) # 提交任务，发送语音消息
+                        else:
+                            self.logger.debug("系统繁忙，跳过文本消息处理")
                 
                 # 处理开始录音，把上次的声音清除
                 if msg_json["state"] == MessageState.START.value:

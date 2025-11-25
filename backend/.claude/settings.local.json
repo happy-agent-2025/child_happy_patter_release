@@ -10,7 +10,8 @@
       "Bash(set:*)",
       "Bash(find:*)",
       "Bash(del:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(git config:*)"
     ],
     "deny": [],
     "ask": []

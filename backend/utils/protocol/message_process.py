@@ -204,41 +204,45 @@ class MessageProcess:
             assistant_text = self._fallback_to_llm(self.text)
 
         # 处理响应文本流式输出
-        text_buffer = [assistant_text]
-        iot_msg = None
+        iot_messages = []
 
         # 设置音频传输状态
         self.is_audio_transmitting = True
 
         try:
-            text_buffer, complete_sentence = self.get_complete_sentence(text_buffer)
-            if len(complete_sentence) > 0:
-                if "{" in complete_sentence:
-                    self.logger.info(f"JSON数据: {complete_sentence}")
-                    iot_msg = complete_sentence
-                else:
-                    self.logger.info(f"完整的句子: {complete_sentence}")
-                    future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, complete_sentence)
-                    self.connect.audio_send_queue.put(future)
+            # 使用智能分句器将长文本拆分成所有完整句子
+            all_sentences = self.sentence_splitter.split_all_sentences(assistant_text)
 
-            if len(text_buffer) > 0:
-                remaining_text = ''.join(text_buffer)
-                if len(remaining_text) > 0:
-                    if "{" in remaining_text:
-                        iot_msg = remaining_text
-                        self.logger.info(f"JSON数据: {remaining_text}")
+            self.logger.info(f"智能分句结果: 共{len(all_sentences)}个句子")
+
+            # 处理每个句子
+            for i, sentence in enumerate(all_sentences):
+                if len(sentence.strip()) > 0:  # 跳过空句子
+                    if "{" in sentence:
+                        self.logger.info(f"JSON数据[{i+1}/{len(all_sentences)}]: {sentence}")
+                        iot_messages.append(sentence)
                     else:
-                        # self.logger.info(f"剩余的句子: {remaining_text}")
-                        future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, remaining_text)
+                        self.logger.info(f"完整句子[{i+1}/{len(all_sentences)}]: {sentence}")
+                        future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, sentence)
+                        self.connect.add_audio_task(future)  # 添加音频任务跟踪
                         self.connect.audio_send_queue.put(future)
 
             # 发送结束标记
             future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, None)
+            self.connect.add_audio_task(future)  # 添加音频任务跟踪
             self.connect.audio_send_queue.put(future)
 
-            # 等待音频队列处理完成（简单延迟，实际应该更智能）
-            import time
-            time.sleep(2)  # 等待2秒让音频开始传输
+            # 等待音频队列处理完成（智能队列状态检测）
+            self.logger.info("等待音频队列处理完成...")
+            queue_status = self.connect.get_audio_queue_status()
+            self.logger.info(f"音频队列状态: {queue_status}")
+
+            # 使用智能队列状态检测等待音频传输完成
+            completed = self.connect.wait_for_audio_completion(timeout=30)
+            if completed:
+                self.logger.info("音频队列处理完成")
+            else:
+                self.logger.warning("音频队列处理超时，继续执行")
 
         finally:
             # 确保状态被正确重置
@@ -246,15 +250,16 @@ class MessageProcess:
             self.is_audio_transmitting = False
 
         # 处理IoT消息
-        if iot_msg is not None:
-            try:
-                future = asyncio.run_coroutine_threadsafe(
-                    SendMessage.send_iot_message(self.connect, iot_msg),
-                    self.connect.loop
-                )
-                future.result(timeout=5)
-            except Exception as e:
-                self.logger.error(f"websocket 发送异常{e}")
+        if iot_messages:
+            for iot_msg in iot_messages:
+                try:
+                    future = asyncio.run_coroutine_threadsafe(
+                        SendMessage.send_iot_message(self.connect, iot_msg),
+                        self.connect.loop
+                    )
+                    future.result(timeout=5)
+                except Exception as e:
+                    self.logger.error(f"websocket 发送IoT消息异常{e}")
 
 
     # 获取完整的句子

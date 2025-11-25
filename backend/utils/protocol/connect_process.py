@@ -30,30 +30,48 @@ class ConnectProcess:
         self.user_id = None  # 用户ID
         self.session_id = None  # 会话ID
         self.agents_state = None  # Agents系统状态
+
+        # 音频队列状态跟踪
+        self.audio_tasks = []  # 跟踪音频任务
+        self.audio_completion_event = threading.Event()  # 音频完成事件
+        self.audio_task_lock = threading.Lock()  # 音频任务锁
+        self.pending_audio_tasks = 0  # 待处理音频任务数量
     
     def _audio_send_thread(self):
         """音频发送线程，通过事件控制线程运行，并释放资源"""
         while not self.stop_event.is_set():
-            
+
             try:
                 future = self.audio_send_queue.get(timeout=1)
             except queue.Empty:
                 self.logger.debug("音频发送队列为空")
                 continue
-            
+
             if future is None:
                 continue
-            
-            opus_data, duration, text = future.result(timeout=10) # 等待结果，超时10秒，等待处理完成， future只是占位符
-            
-            try: 
-                # 提交协程处理，在主线程中处理
-                future_1 = asyncio.run_coroutine_threadsafe(
-                    SendMessage.send_audio(self, self.config, opus_data, text), self.loop
-                )
-                future_1.result()
+
+            try:
+                opus_data, duration, text = future.result(timeout=10) # 等待结果，超时10秒，等待处理完成， future只是占位符
+
+                try:
+                    # 提交协程处理，在主线程中处理
+                    future_1 = asyncio.run_coroutine_threadsafe(
+                        SendMessage.send_audio(self, self.config, opus_data, text), self.loop
+                    )
+                    future_1.result()
+
+                    # 标记音频任务完成
+                    self.mark_audio_task_completed()
+
+                except Exception as e:
+                    self.logger.error(f"发送消息到前端异常: {e}")
+                    # 即使发送失败，也要标记任务完成
+                    self.mark_audio_task_completed()
+
             except Exception as e:
-                self.logger.error(f"发送消息到前端异常: {e}")
+                self.logger.error(f"音频任务处理异常: {e}")
+                # 任务处理失败，也要标记完成
+                self.mark_audio_task_completed()
 
     def _initialize_agents_state(self):
         """初始化Agents系统状态"""
@@ -103,7 +121,60 @@ class ConnectProcess:
             except queue.Empty:
                 continue
         q.queue.clear()
-    
+
+    def add_audio_task(self, future):
+        """添加音频任务到跟踪列表"""
+        with self.audio_task_lock:
+            self.audio_tasks.append(future)
+            self.pending_audio_tasks += 1
+            self.audio_completion_event.clear()  # 重置完成事件
+
+    def mark_audio_task_completed(self):
+        """标记音频任务完成"""
+        with self.audio_task_lock:
+            self.pending_audio_tasks -= 1
+            if self.pending_audio_tasks <= 0:
+                self.pending_audio_tasks = 0
+                self.audio_completion_event.set()  # 设置完成事件
+
+    def wait_for_audio_completion(self, timeout=30):
+        """
+        等待所有音频任务完成
+
+        Args:
+            timeout: 超时时间（秒）
+
+        Returns:
+            bool: True表示所有任务完成，False表示超时
+        """
+        if self.pending_audio_tasks == 0:
+            return True  # 没有待处理任务，直接返回完成
+
+        self.logger.info(f"等待音频队列处理完成，待处理任务: {self.pending_audio_tasks}")
+
+        # 等待完成事件
+        completed = self.audio_completion_event.wait(timeout=timeout)
+
+        if completed:
+            self.logger.info("音频队列处理完成")
+            # 清理任务列表
+            with self.audio_task_lock:
+                self.audio_tasks.clear()
+            return True
+        else:
+            self.logger.warning(f"音频队列处理超时，仍有 {self.pending_audio_tasks} 个任务未完成")
+            return False
+
+    def get_audio_queue_status(self):
+        """获取音频队列状态"""
+        with self.audio_task_lock:
+            return {
+                'pending_tasks': self.pending_audio_tasks,
+                'total_tasks': len(self.audio_tasks),
+                'queue_size': self.audio_send_queue.qsize(),
+                'is_completed': self.pending_audio_tasks == 0
+            }
+
     # 处理连接
     async def connect(self, websocket):
         self.logger.info("开始处理连接")

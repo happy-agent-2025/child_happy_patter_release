@@ -222,107 +222,92 @@
 - ✅ 严格TDD测试用例编写（14个测试用例，100%通过）
 - ✅ 删除旧客户端文件（openai_client.py, ollama_client.py）
 
-## 智能分句功能测试用例
+## MessageProcess长句拆分问题修复测试用例
 
-### 测试智能分句器导入和接口存在性
+### 测试MessageProcess长句拆分功能
 
-#### TestSentenceSplitter.test_chinese_sentence_splitting
+#### TestMessageProcessSentenceSplittingReal.test_single_sentence_processing_real
 - **状态**: 🟢 通过
-- **描述**: 测试中文句子分句
-- **测试内容**: 验证中文文本可以正确分割成句子
+- **描述**: 测试单句文本处理 - 真实接口
+- **测试内容**: 验证单句文本可以正确分割成1个句子
 - **实现时间**: 2025-11-25
 - **通过时间**: 2025-11-25
 
-#### TestSentenceSplitter.test_english_sentence_splitting
+#### TestMessageProcessSentenceSplittingReal.test_multiple_sentence_splitting_real
 - **状态**: 🟢 通过
-- **描述**: 测试英文句子分句
-- **测试内容**: 验证英文文本可以正确分割成句子
+- **描述**: 测试多句长文本分句 - 真实接口
+- **测试内容**: 验证多句文本可以正确分割成多个句子
 - **实现时间**: 2025-11-25
 - **通过时间**: 2025-11-25
 
-#### TestSentenceSplitter.test_mixed_chinese_english_splitting
+#### TestMessageProcessSentenceSplittingReal.test_mixed_chinese_english_splitting_real
 - **状态**: 🟢 通过
-- **描述**: 测试中英文混合句子分句
-- **测试内容**: 验证中英文混合文本可以正确分割成句子
+- **描述**: 测试中英文混合文本分句 - 真实接口
+- **测试内容**: 验证中英文混合文本可以正确分割成多个句子
 - **实现时间**: 2025-11-25
 - **通过时间**: 2025-11-25
 
-#### TestSentenceSplitter.test_multiple_sentence_endings
+#### TestMessageProcessSentenceSplittingReal.test_json_structure_handling_real
 - **状态**: 🟢 通过
-- **描述**: 测试多种句子结束符
-- **测试内容**: 验证多种结束符（。！？. ! ?）都可以正确识别
+- **描述**: 测试JSON结构处理 - 真实接口
+- **测试内容**: 验证JSON结构不被拆分，正确处理
 - **实现时间**: 2025-11-25
 - **通过时间**: 2025-11-25
 
-#### TestSentenceSplitter.test_no_sentence_endings
+#### TestMessageProcessSentenceSplittingReal.test_special_characters_handling_real
 - **状态**: 🟢 通过
-- **描述**: 测试没有句子结束符的情况
-- **测试内容**: 验证没有结束符的文本不会被错误分割
+- **描述**: 测试特殊字符处理 - 真实接口
+- **测试内容**: 验证特殊字符（引号、省略号等）正确处理
 - **实现时间**: 2025-11-25
 - **通过时间**: 2025-11-25
 
-#### TestSentenceSplitter.test_empty_buffer
+#### TestMessageProcessSentenceSplittingReal.test_empty_text_handling_real
 - **状态**: 🟢 通过
-- **描述**: 测试空缓冲区
-- **测试内容**: 验证空缓冲区处理正确
+- **描述**: 测试空文本处理 - 真实接口
+- **测试内容**: 验证空文本返回空列表
 - **实现时间**: 2025-11-25
 - **通过时间**: 2025-11-25
 
-#### TestSentenceSplitter.test_json_structure_handling
+#### TestMessageProcessSentenceSplittingReal.test_very_long_sentence_splitting_real
 - **状态**: 🟢 通过
-- **描述**: 测试JSON结构处理
-- **测试内容**: 验证JSON结构不会被错误分割
+- **描述**: 测试非常长的句子拆分 - 真实接口
+- **测试内容**: 验证非常长的文本被正确分割成多个句子
 - **实现时间**: 2025-11-25
 - **通过时间**: 2025-11-25
 
-#### TestSentenceSplitter.test_complex_mixed_content
-- **状态**: 🟢 通过
-- **描述**: 测试复杂混合内容
-- **测试内容**: 验证复杂混合内容可以正确分割
-- **实现时间**: 2025-11-25
-- **通过时间**: 2025-11-25
+## MessageProcess长句拆分问题修复总结
 
-#### TestSentenceSplitter.test_ellipsis_handling
-- **状态**: 🟢 通过
-- **描述**: 测试省略号处理
-- **测试内容**: 验证省略号（...、……）不会被误认为句子结束
-- **实现时间**: 2025-11-25
-- **通过时间**: 2025-11-25
+### 问题分析
+**根本原因**: MessageProcess中的`start_chat`方法只调用了一次`get_complete_sentence`，导致长句子没有被正确拆分成多个短句子发送到前端硬件
 
-#### TestSentenceSplitter.test_quotation_marks_handling
-- **状态**: 🟢 通过
-- **描述**: 测试引号处理
-- **测试内容**: 验证引号内的句子结束符不会被错误分割
-- **实现时间**: 2025-11-25
-- **通过时间**: 2025-11-25
+**具体问题**:
+- 原始代码只处理第一个完整句子和剩余文本作为单个块
+- 没有循环处理所有句子，导致长响应被错误地合并发送
+- JSON消息处理只保存最后一个消息
+
+### 修复方案
+- **智能分句循环**: 使用`split_all_sentences`方法将长文本拆分成所有完整句子
+- **循环处理**: 对每个句子分别处理，确保每个短句子都被单独发送到前端硬件
+- **JSON消息优化**: 支持多个JSON消息的处理，而不是只保存最后一个
+- **状态管理**: 保持音频传输状态管理机制
 
 ### 重构记录
-- **测试环境兼容性修复**: 2025-11-24 - 修复了Util.get_config()在pytest环境中的命令行参数解析问题
-- **配置缓存优化**: 2025-11-24 - 实现了配置缓存机制避免重复加载
-- **懒加载初始化**: 2025-11-24 - 实现了AgentModelManager的懒加载初始化，避免模块导入时的配置加载问题
-- **智能分句器实现**: 2025-11-25 - 实现了SmartSentenceSplitter类，支持中英文混合文本智能分句
-- **性能优化**: 2025-11-25 - 添加了缓存机制优化quote和bracket检测性能
+- **MessageProcess长句拆分修复**: 2025-11-25 - 修复了MessageProcess中长句子拆分问题，使用`split_all_sentences`循环处理所有句子
+- **JSON消息处理优化**: 2025-11-25 - 支持多个JSON消息的处理，而不是只保存最后一个
+- **真实接口测试**: 2025-11-25 - 编写了7个真实接口测试用例，不使用mock方式
 
 ### TDD流程验证
-- **红阶段**: 14个测试用例全部编写完成，初始运行全部失败
-- **绿阶段**: 通过逐步实现功能，使所有14个测试用例全部通过
-- **重构阶段**: 优化代码结构，修复测试环境兼容性问题
-- **最终状态**: 14/14测试用例通过，功能完整实现
-
-## 智能分句功能总结
+- **红阶段**: 7个真实接口测试用例编写完成，验证问题存在
+- **绿阶段**: 通过实现`split_all_sentences`循环处理，使所有7个测试用例全部通过
+- **重构阶段**: 优化JSON消息处理，支持多个消息
+- **最终状态**: 7/7测试用例通过，问题完全修复
 
 ### 已完成的功能
-- ✅ 智能中英文混合文本分句器实现
-- ✅ 支持特殊字符和嵌套结构处理
-- ✅ 性能优化和缓存机制
-- ✅ 严格TDD测试用例编写（10个测试用例，100%通过）
-- ✅ 重构MessageProcess中的get_complete_sentence接口
-
-### TDD流程验证
-- **红阶段**: 10个测试用例全部编写完成，初始运行全部失败
-- **绿阶段**: 通过逐步实现功能，使所有10个测试用例全部通过
-- **重构阶段**: 优化代码结构，添加性能缓存机制
-- **最终状态**: 10/10测试用例通过，功能完整实现
+- ✅ MessageProcess长句拆分问题修复
+- ✅ 智能分句循环处理实现
+- ✅ 多个JSON消息支持
+- ✅ 严格TDD真实接口测试用例编写（7个测试用例，100%通过）
+- ✅ 重构MessageProcess中的句子处理逻辑
 
 ## 语音传输并发问题修复测试用例
 
@@ -382,6 +367,104 @@
 - **绿阶段**: 通过实现状态管理机制，使所有4个测试用例全部通过
 - **重构阶段**: 优化状态管理逻辑，确保健壮性
 - **最终状态**: 4/4测试用例通过，问题完全修复
+
+## 音频队列状态检测功能测试用例
+
+### 测试音频队列状态检测功能
+
+#### TestAudioQueueStateDetection.test_connect_process_has_audio_queue
+- **状态**: 🟢 通过
+- **描述**: 测试ConnectProcess包含音频队列
+- **测试内容**: 验证音频队列存在
+- **实现时间**: 2025-11-25
+- **通过时间**: 2025-11-25
+
+#### TestAudioQueueStateDetection.test_audio_send_thread_exists
+- **状态**: 🟢 通过
+- **描述**: 测试音频发送线程存在
+- **测试内容**: 验证音频发送线程相关属性存在
+- **实现时间**: 2025-11-25
+- **通过时间**: 2025-11-25
+
+#### TestAudioQueueStateDetection.test_wait_for_audio_completion_method_exists
+- **状态**: 🟢 通过
+- **描述**: 测试wait_for_audio_completion方法存在
+- **测试内容**: 验证智能等待方法存在且可调用
+- **实现时间**: 2025-11-25
+- **通过时间**: 2025-11-25
+
+#### TestAudioQueueStateDetection.test_audio_queue_task_tracking_exists
+- **状态**: 🟢 通过
+- **描述**: 测试音频任务跟踪功能存在
+- **测试内容**: 验证任务跟踪功能存在
+- **实现时间**: 2025-11-25
+- **通过时间**: 2025-11-25
+
+#### TestAudioQueueStateDetection.test_message_process_uses_smart_queue_detection
+- **状态**: 🟢 通过
+- **描述**: 测试MessageProcess使用智能队列状态检测
+- **测试内容**: 验证使用智能队列状态检测而非time.sleep
+- **实现时间**: 2025-11-25
+- **通过时间**: 2025-11-25
+
+#### TestAudioQueueStateDetection.test_audio_queue_processing_completion_detection
+- **状态**: 🟢 通过
+- **描述**: 测试音频队列处理完成检测功能
+- **测试内容**: 验证队列处理完成状态检测功能
+- **实现时间**: 2025-11-25
+- **通过时间**: 2025-11-25
+
+#### TestAudioQueueStateDetection.test_audio_queue_timeout_handling
+- **状态**: 🟢 通过
+- **描述**: 测试音频队列超时处理
+- **测试内容**: 验证超时处理机制
+- **实现时间**: 2025-11-25
+- **通过时间**: 2025-11-25
+
+#### TestAudioQueueStateDetection.test_multiple_audio_tasks_completion_tracking
+- **状态**: 🟢 通过
+- **描述**: 测试多个音频任务完成跟踪
+- **测试内容**: 验证多个任务完成状态跟踪
+- **实现时间**: 2025-11-25
+- **通过时间**: 2025-11-25
+
+#### TestAudioQueueStateDetection.test_audio_queue_progress_monitoring
+- **状态**: 🟢 通过
+- **描述**: 测试音频队列进度监控
+- **测试内容**: 验证队列进度监控功能
+- **实现时间**: 2025-11-25
+- **通过时间**: 2025-11-25
+
+## 音频队列状态检测功能修复总结
+
+### 问题分析
+**根本原因**: MessageProcess中使用简单的time.sleep(2)等待音频队列处理完成，无法准确检测队列状态
+
+**具体问题**:
+- 固定延迟等待：使用time.sleep(2)无法适应不同长度的音频处理时间
+- 状态检测缺失：无法准确知道音频队列是否真正处理完成
+- 超时处理缺失：没有超时机制，可能导致无限等待
+- 进度监控缺失：无法获取音频队列的实时处理状态
+
+### 修复方案
+- **智能队列状态检测**: 在ConnectProcess中添加音频队列状态跟踪机制
+- **任务完成跟踪**: 添加`add_audio_task`和`mark_audio_task_completed`方法跟踪任务状态
+- **超时处理**: 在`wait_for_audio_completion`方法中添加超时机制
+- **进度监控**: 添加`get_audio_queue_status`方法提供实时队列状态
+- **线程安全**: 使用锁机制确保多线程环境下的状态一致性
+
+### 已完成的功能
+- ✅ 智能队列状态检测机制实现
+- ✅ 音频任务跟踪功能实现
+- ✅ 超时处理和进度监控功能
+- ✅ 严格TDD测试用例编写（9个测试用例，100%通过）
+- ✅ 替换MessageProcess中的time.sleep(2)为智能队列状态检测
+
+### TDD流程验证
+- **红阶段**: 9个测试用例编写完成，验证当前问题状态
+- **绿阶段**: 通过实现智能队列状态检测功能，使所有9个测试用例全部通过
+- **重构阶段**: 优化代码结构，确保所有音频任务都被正确跟踪
+- **最终状态**: 9/9测试用例通过，问题完全修复
 
 ## 记忆系统集成测试用例
 

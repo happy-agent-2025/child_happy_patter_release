@@ -73,7 +73,7 @@ class SendMessage:
         frame_duration = config["hello_message"]["audio_params"]["frame_duration"]
         frame_s = frame_duration / 1000
         
-        await SendMessage._send_audio_text(connect, MessageType.TTS.value, MessageState.START.value, "TTS结束")
+        await SendMessage._send_audio_text(connect, MessageType.TTS.value, MessageState.START.value, "TTS开始")
         # 计算音频总时长
         total_audio_duration = len(audios) * frame_s
         start_time = time.perf_counter()
@@ -106,7 +106,7 @@ class SendMessage:
             await asyncio.sleep(remaining_play_time)
         
         # 发送后端音频结束
-        await SendMessage._send_audio_text(connect, MessageType.TTS.value, MessageState.STOP.value, "TTS结束")
+        # await SendMessage._send_audio_text(connect, MessageType.TTS.value, MessageState.STOP.value, "TTS结束")
     
     @staticmethod
     async def _send_to_websocket_gateway(connect, opus_packet, timestamp, sequence):

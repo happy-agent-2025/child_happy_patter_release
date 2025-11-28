@@ -233,7 +233,7 @@ class SmartSentenceSplitter:
             remaining_text = buffer_str[sentence_end_pos + 1:]
             return [remaining_text] if remaining_text else [], complete_sentence
         else:
-            return [buffer_str], ""
+            return [], ""
 
     def _find_sentence_end_position(self, text: str) -> int:
         """查找句子结束位置"""

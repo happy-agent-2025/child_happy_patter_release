@@ -167,41 +167,51 @@ class MessageProcess:
 
     def start_chat(self, message):
         """开始聊天 - 集成agents系统"""
+        
+        processing_text = ""
+        is_only_wake_up = False
         if isinstance(message, str):
-            self.text = message
+            is_only_wake_up = True
+            processing_text = message
+            self.logger.info(f"传入的文本: {processing_text}")
         else:
-            self.text = self.ai.asr.opus_data_to_text(message)
+            is_only_wake_up = False
+            processing_text = self.ai.asr.opus_data_to_text(message)
             """检查文本是否只包含符号（不含有效文字）"""
-            if self.is_only_punctuation(self.text):
-                self.logger.info(f"识别到的垃圾文本: {self.text}")
+            if self.is_only_punctuation(processing_text):
+                self.logger.info(f"识别到的垃圾文本: {processing_text}")
                 future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, None)
+                self.connect.add_audio_task(future)  # 添加音频任务跟踪
                 self.connect.audio_send_queue.put(future)
                 self.is_processing = False
                 return
-            self.logger.info(f"识别结果: {self.text}")
+            self.logger.info(f"识别结果: {processing_text}")
 
         # 发送用户文本到前端
         try:
             future = asyncio.run_coroutine_threadsafe(
-                SendMessage._send_stt_text(self.connect, self.text),
+                SendMessage._send_stt_text(self.connect, processing_text),
                 self.connect.loop
             )
             future.result(timeout=5)
         except Exception as e:
             self.logger.error(f"websocket 发送异常{e}")
-
-        # 使用agents系统处理消息
-        try:
-            # 在现有线程池中运行异步的agents处理
-            future = asyncio.run_coroutine_threadsafe(
-                self._process_with_agents(self.text),
-                self.connect.loop
-            )
-            assistant_text = future.result(timeout=30)  # 设置30秒超时
-        except Exception as e:
-            self.logger.error(f"Agents系统处理超时或失败: {e}")
-            # 降级到原有LLM调用
-            assistant_text = self._fallback_to_llm(self.text)
+         
+        if not is_only_wake_up:
+            # 使用agents系统处理消息
+            try:
+                # 在现有线程池中运行异步的agents处理
+                future = asyncio.run_coroutine_threadsafe(
+                    self._process_with_agents(processing_text),
+                    self.connect.loop
+                )
+                assistant_text = future.result(timeout=30)  # 设置30秒超时
+            except Exception as e:
+                self.logger.error(f"Agents系统处理超时或失败: {e}")
+                # 降级到原有LLM调用
+                assistant_text = self._fallback_to_llm(processing_text)
+        else:
+            assistant_text = processing_text
 
         # 处理响应文本流式输出
         iot_messages = []
@@ -218,19 +228,10 @@ class MessageProcess:
             # 处理每个句子
             for i, sentence in enumerate(all_sentences):
                 if len(sentence.strip()) > 0:  # 跳过空句子
-                    if "{" in sentence:
-                        self.logger.info(f"JSON数据[{i+1}/{len(all_sentences)}]: {sentence}")
-                        iot_messages.append(sentence)
-                    else:
-                        self.logger.info(f"完整句子[{i+1}/{len(all_sentences)}]: {sentence}")
-                        future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, sentence)
-                        self.connect.add_audio_task(future)  # 添加音频任务跟踪
-                        self.connect.audio_send_queue.put(future)
-
-            # 发送结束标记
-            future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, None)
-            self.connect.add_audio_task(future)  # 添加音频任务跟踪
-            self.connect.audio_send_queue.put(future)
+                    self.logger.info(f"完整句子[{i+1}/{len(all_sentences)}]: {sentence}")
+                    future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, sentence)
+                    self.connect.add_audio_task(future)  # 添加音频任务跟踪
+                    self.connect.audio_send_queue.put(future)
 
             # 等待音频队列处理完成（智能队列状态检测）
             self.logger.info("等待音频队列处理完成...")
@@ -240,27 +241,21 @@ class MessageProcess:
             # 使用智能队列状态检测等待音频传输完成
             completed = self.connect.wait_for_audio_completion(timeout=30)
             if completed:
-                self.logger.info("音频队列处理完成")
+                self.logger.info("音频队列处理完成，发送结束标记")
+                # 发送结束标记
+                future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, None)
+                self.connect.add_audio_task(future)  # 添加音频任务跟踪
+                self.is_processing = False
+                self.is_audio_transmitting = False
+                self.connect.audio_send_queue.put(future)
             else:
                 self.logger.warning("音频队列处理超时，继续执行")
 
-        finally:
+        except Exception as e:
+            self.logger.error(f"音频处理错误: {e}")
             # 确保状态被正确重置
             self.is_processing = False
             self.is_audio_transmitting = False
-
-        # 处理IoT消息
-        if iot_messages:
-            for iot_msg in iot_messages:
-                try:
-                    future = asyncio.run_coroutine_threadsafe(
-                        SendMessage.send_iot_message(self.connect, iot_msg),
-                        self.connect.loop
-                    )
-                    future.result(timeout=5)
-                except Exception as e:
-                    self.logger.error(f"websocket 发送IoT消息异常{e}")
-
 
     # 获取完整的句子
     def get_complete_sentence(self, text_buffer: list):
@@ -276,7 +271,7 @@ class MessageProcess:
         return self.sentence_splitter.get_complete_sentence(text_buffer)
     async def text_message(self, message):
         """处理文本消息"""
-        self.logger.info("接收到文本消息: " + message)
+        self.logger.info(">>>> 接收到文本消息: " + message)
         try:
             msg_json = json.loads(message) # 加载JSON消息
             if msg_json["type"] == MessageType.HELLO.value:
@@ -288,10 +283,10 @@ class MessageProcess:
                     if "text" in msg_json:
                         text = msg_json["text"]
                         # 检查是否正在处理或音频传输中
-                        if not (self.is_processing or self.is_audio_transmitting):
-                            self.connect.connect_thread_pool.submit(self.start_chat, text) # 提交任务，发送语音消息
+                        if not (self.is_processing or self.is_audio_transmitting) and text == "你好小智":
+                            self.connect.connect_thread_pool.submit(self.start_chat, "你好，有什么可以帮助您的吗？") # 提交任务，发送语音消息
                         else:
-                            self.logger.debug("系统繁忙，跳过文本消息处理")
+                            self.logger.info(f"文本消息处理:{self.is_processing}-{self.is_audio_transmitting}-{text}")
                 
                 # 处理开始录音，把上次的声音清除
                 if msg_json["state"] == MessageState.START.value:

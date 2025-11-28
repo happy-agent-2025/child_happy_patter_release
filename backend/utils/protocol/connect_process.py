@@ -40,7 +40,6 @@ class ConnectProcess:
     def _audio_send_thread(self):
         """音频发送线程，通过事件控制线程运行，并释放资源"""
         while not self.stop_event.is_set():
-
             try:
                 future = self.audio_send_queue.get(timeout=1)
             except queue.Empty:
@@ -60,17 +59,14 @@ class ConnectProcess:
                     )
                     future_1.result()
 
-                    # 标记音频任务完成
-                    self.mark_audio_task_completed()
-
                 except Exception as e:
                     self.logger.error(f"发送消息到前端异常: {e}")
-                    # 即使发送失败，也要标记任务完成
+                finally:
                     self.mark_audio_task_completed()
 
             except Exception as e:
                 self.logger.error(f"音频任务处理异常: {e}")
-                # 任务处理失败，也要标记完成
+            finally:
                 self.mark_audio_task_completed()
 
     def _initialize_agents_state(self):

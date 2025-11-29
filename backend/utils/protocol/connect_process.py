@@ -31,43 +31,61 @@ class ConnectProcess:
         self.session_id = None  # 会话ID
         self.agents_state = None  # Agents系统状态
 
-        # 音频队列状态跟踪
-        self.audio_tasks = []  # 跟踪音频任务
-        self.audio_completion_event = threading.Event()  # 音频完成事件
-        self.audio_task_lock = threading.Lock()  # 音频任务锁
-        self.pending_audio_tasks = 0  # 待处理音频任务数量
+        # 音频播放状态跟踪
+        self.current_playing_index = 0  # 当前播放句子索引
+        self.total_sentences = 0        # 总句子数
+        self.is_last_sentence_playing = False  # 最后一个句子播放状态
+        self.audio_playback_monitor_thread = None  # 播放监控线程
+        self.playback_completion_event = threading.Event()  # 播放完成事件
+        self.playback_state_lock = threading.Lock()  # 播放状态锁
+        self.current_audio_completed = False  # 当前音频播放完成状态
+        self.audio_completion_callbacks = []  # 音频播放完成回调列表
+
+        # 句子信息现在通过音频队列传递，不再需要单独的句子信息队列
     
     def _audio_send_thread(self):
         """音频发送线程，通过事件控制线程运行，并释放资源"""
         while not self.stop_event.is_set():
             try:
-                future = self.audio_send_queue.get(timeout=1)
+                # 获取集成音频任务：包含future和句子信息
+                integrated_task = self.audio_send_queue.get(timeout=1)
             except queue.Empty:
                 self.logger.debug("音频发送队列为空")
                 continue
 
-            if future is None:
+            if integrated_task is None:
                 continue
 
             try:
+                # 解构集成任务
+                future, sentence_info = integrated_task
+
+                # 获取音频数据
                 opus_data, duration, text = future.result(timeout=10) # 等待结果，超时10秒，等待处理完成， future只是占位符
 
                 try:
                     # 提交协程处理，在主线程中处理
-                    future_1 = asyncio.run_coroutine_threadsafe(
-                        SendMessage.send_audio(self, self.config, opus_data, text), self.loop
-                    )
+                    if sentence_info:
+                        future_1 = asyncio.run_coroutine_threadsafe(
+                            SendMessage.send_audio(
+                                self, self.config, opus_data, text,
+                                sentence_info['current_index'],
+                                sentence_info['total_sentences'],
+                                sentence_info['is_last_sentence']
+                            ), self.loop
+                        )
+                    else:
+                        # 如果没有句子信息，使用默认参数
+                        future_1 = asyncio.run_coroutine_threadsafe(
+                            SendMessage.send_audio(self, self.config, opus_data, text), self.loop
+                        )
                     future_1.result()
 
                 except Exception as e:
                     self.logger.error(f"发送消息到前端异常: {e}")
-                finally:
-                    self.mark_audio_task_completed()
 
             except Exception as e:
                 self.logger.error(f"音频任务处理异常: {e}")
-            finally:
-                self.mark_audio_task_completed()
 
     def _initialize_agents_state(self):
         """初始化Agents系统状态"""
@@ -118,58 +136,96 @@ class ConnectProcess:
                 continue
         q.queue.clear()
 
-    def add_audio_task(self, future):
-        """添加音频任务到跟踪列表"""
-        with self.audio_task_lock:
-            self.audio_tasks.append(future)
-            self.pending_audio_tasks += 1
-            self.audio_completion_event.clear()  # 重置完成事件
 
-    def mark_audio_task_completed(self):
-        """标记音频任务完成"""
-        with self.audio_task_lock:
-            self.pending_audio_tasks -= 1
-            if self.pending_audio_tasks <= 0:
-                self.pending_audio_tasks = 0
-                self.audio_completion_event.set()  # 设置完成事件
-
-    def wait_for_audio_completion(self, timeout=30):
+    def set_playback_state(self, current_index, total_sentences, is_last_sentence):
         """
-        等待所有音频任务完成
+        设置音频播放状态
 
         Args:
-            timeout: 超时时间（秒）
-
-        Returns:
-            bool: True表示所有任务完成，False表示超时
+            current_index: 当前播放句子索引
+            total_sentences: 总句子数
+            is_last_sentence: 是否是最后一个句子
         """
-        if self.pending_audio_tasks == 0:
-            return True  # 没有待处理任务，直接返回完成
+        with self.playback_state_lock:
+            self.current_playing_index = current_index
+            self.total_sentences = total_sentences
+            self.is_last_sentence_playing = is_last_sentence
+            self.current_audio_completed = False  # 重置音频完成状态
 
-        self.logger.info(f"等待音频队列处理完成，待处理任务: {self.pending_audio_tasks}")
+            self.logger.info(f"设置播放状态: 当前句子 {current_index+1}/{total_sentences}, 最后一个句子: {is_last_sentence}")
 
-        # 等待完成事件
-        completed = self.audio_completion_event.wait(timeout=timeout)
+    def mark_audio_completed(self):
+        """标记当前音频播放完成"""
+        with self.playback_state_lock:
+            self.current_audio_completed = True
 
-        if completed:
-            self.logger.info("音频队列处理完成")
-            # 清理任务列表
-            with self.audio_task_lock:
-                self.audio_tasks.clear()
-            return True
-        else:
-            self.logger.warning(f"音频队列处理超时，仍有 {self.pending_audio_tasks} 个任务未完成")
-            return False
+            if self.is_last_sentence_playing and self.current_playing_index == self.total_sentences - 1:
+                self.logger.info("最后一个句子在send_audio中播放完成")
+            else:
+                self.logger.info(f"非最后一个句子音频播放完成: 句子 {self.current_playing_index+1}/{self.total_sentences}")
 
-    def get_audio_queue_status(self):
-        """获取音频队列状态"""
-        with self.audio_task_lock:
-            return {
-                'pending_tasks': self.pending_audio_tasks,
-                'total_tasks': len(self.audio_tasks),
-                'queue_size': self.audio_send_queue.qsize(),
-                'is_completed': self.pending_audio_tasks == 0
-            }
+            # 触发所有回调
+            for callback in self.audio_completion_callbacks:
+                try:
+                    callback()
+                except Exception as e:
+                    self.logger.error(f"音频完成回调执行失败: {e}")
+
+    def add_audio_completion_callback(self, callback):
+        """添加音频播放完成回调"""
+        with self.playback_state_lock:
+            self.audio_completion_callbacks.append(callback)
+
+
+    def start_audio_playback_monitor(self):
+        """启动音频播放监控线程"""
+        if self.audio_playback_monitor_thread is None or not self.audio_playback_monitor_thread.is_alive():
+            self.audio_playback_monitor_thread = threading.Thread(
+                target=self._audio_playback_monitor,
+                daemon=True
+            )
+            self.audio_playback_monitor_thread.start()
+            self.logger.info("音频播放监控线程已启动")
+
+    def _audio_playback_monitor(self):
+        """音频播放监控线程"""
+        while not self.stop_event.is_set():
+            try:
+                # 检查是否是最后一个句子且在send_audio中播放完成
+                with self.playback_state_lock:
+                    is_last_sentence = self.is_last_sentence_playing
+                    current_index = self.current_playing_index
+                    total_sentences = self.total_sentences
+                    current_audio_completed = self.current_audio_completed
+
+                # 如果是最后一个句子且在send_audio中播放完成，则发送结束信号
+                if (is_last_sentence and
+                    current_index == total_sentences - 1 and
+                    current_audio_completed):
+                    self.logger.info("检测到最后一个句子在send_audio中播放完成，发送结束信号")
+                    self._send_playback_completion_signal()
+                    break
+
+                # 等待一段时间再检查
+                self.stop_event.wait(0.5)
+
+            except Exception as e:
+                self.logger.error(f"音频播放监控线程异常: {e}")
+                break
+
+    def _send_playback_completion_signal(self):
+        """发送播放完成信号"""
+        try:
+            # 向前端发送response为None的消息，表示播放完成
+            future = asyncio.run_coroutine_threadsafe(
+                SendMessage.send_audio(self, self.config, None, "播放完成"),
+                self.loop
+            )
+            future.result(timeout=5)
+            self.logger.info("播放完成信号已发送")
+        except Exception as e:
+            self.logger.error(f"发送播放完成信号异常: {e}")
+
 
     # 处理连接
     async def connect(self, websocket):

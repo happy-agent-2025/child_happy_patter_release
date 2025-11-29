@@ -225,34 +225,31 @@ class MessageProcess:
 
             self.logger.info(f"智能分句结果: 共{len(all_sentences)}个句子")
 
+            # 启动音频播放监控线程
+            self.connect.start_audio_playback_monitor()
+
             # 处理每个句子
             for i, sentence in enumerate(all_sentences):
                 if len(sentence.strip()) > 0:  # 跳过空句子
+                    is_last_sentence = (i == len(all_sentences) - 1)
+
+                    # 创建句子信息
+                    sentence_info = {
+                        'current_index': i,
+                        'total_sentences': len(all_sentences),
+                        'is_last_sentence': is_last_sentence
+                    }
+
                     self.logger.info(f"完整句子[{i+1}/{len(all_sentences)}]: {sentence}")
                     future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, sentence)
-                    self.connect.add_audio_task(future)  # 添加音频任务跟踪
-                    self.connect.audio_send_queue.put(future)
 
-            # 等待音频队列处理完成（智能队列状态检测）
-            self.logger.info("等待音频队列处理完成...")
-            queue_status = self.connect.get_audio_queue_status()
-            self.logger.info(f"音频队列状态: {queue_status}")
-
-            # 使用智能队列状态检测等待音频传输完成
-            completed = self.connect.wait_for_audio_completion(timeout=30)
-            if completed:
-                self.logger.info("音频队列处理完成，发送结束标记")
-                # 发送结束标记
-                future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, None)
-                self.connect.add_audio_task(future)  # 添加音频任务跟踪
-                self.is_processing = False
-                self.is_audio_transmitting = False
-                self.connect.audio_send_queue.put(future)
-            else:
-                self.logger.warning("音频队列处理超时，继续执行")
+                    # 创建集成音频任务：包含音频数据和句子信息
+                    integrated_task = (future, sentence_info)
+                    self.connect.audio_send_queue.put(integrated_task)
 
         except Exception as e:
             self.logger.error(f"音频处理错误: {e}")
+        finally:
             # 确保状态被正确重置
             self.is_processing = False
             self.is_audio_transmitting = False
@@ -297,8 +294,8 @@ class MessageProcess:
                 # 当前端发送语音消息发送完毕的时候，开始做llm + tts处理 + 发送消息给到前端
                 if msg_json["state"] == MessageState.STOP.value:
                     self.client_audio_stop = True
-                    if len(self.asr_opus_datas) > 0:
-                        await self.bytes_message(b"")
+                    # if len(self.asr_opus_datas) > 0:
+                    #     await self.bytes_message(b"")
    
         except json.JSONDecodeError as e:
             self.logger.error("JSON 解析错误: " + str(e))

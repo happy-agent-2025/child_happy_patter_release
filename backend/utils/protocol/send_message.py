@@ -57,22 +57,26 @@ class SendMessage:
             del message["text"]
         await connect.websocket.send(json.dumps(message))
     
-    # 发送音频   
+    # 发送音频
     @staticmethod
-    async def send_audio(connect, config, audios, reponse):
-        
+    async def send_audio(connect, config, audios, reponse, current_index=None, total_sentences=None, is_last_sentence=None):
+
         # 问答结束返回
-        if not reponse:
+        if not reponse or not audios:
             await SendMessage._send_audio_text(connect, MessageType.TTS.value, MessageState.STOP.value, "TTS结束")
             return
-        
+
         # 发送后端音频开始
         await SendMessage._send_audio_text(connect, MessageType.TTS.value, MessageState.SENTENCE_START.value, reponse)
-        
+
+        # 在音频播放开始时设置播放状态
+        if current_index is not None and total_sentences is not None and is_last_sentence is not None:
+            connect.set_playback_state(current_index, total_sentences, is_last_sentence)
+
         """发送音频消息，主要处理要分段，计算每一段的长度，然后发送"""
         frame_duration = config["hello_message"]["audio_params"]["frame_duration"]
         frame_s = frame_duration / 1000
-        
+
         await SendMessage._send_audio_text(connect, MessageType.TTS.value, MessageState.START.value, "TTS开始")
         # 计算音频总时长
         total_audio_duration = len(audios) * frame_s
@@ -104,7 +108,10 @@ class SendMessage:
         if remaining_play_time > 0:
             # 等待剩余的音频播放时间
             await asyncio.sleep(remaining_play_time)
-        
+
+        # 标记音频播放完成
+        connect.mark_audio_completed()
+
         # 发送后端音频结束
         # await SendMessage._send_audio_text(connect, MessageType.TTS.value, MessageState.STOP.value, "TTS结束")
     

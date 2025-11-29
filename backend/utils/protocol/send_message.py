@@ -59,7 +59,7 @@ class SendMessage:
     
     # 发送音频
     @staticmethod
-    async def send_audio(connect, config, audios, reponse, current_index=None, total_sentences=None, is_last_sentence=None):
+    async def send_audio(connect, config, audios, reponse, current_index=None, total_sentences=None, is_last_sentence=None, task_id=None):
 
         # 问答结束返回
         if not reponse or not audios:
@@ -92,16 +92,16 @@ class SendMessage:
                 remaining_time = expected_end_time - current_time
                 if remaining_time > 0:
                     await asyncio.sleep(remaining_time)
-                    
+
                 timestamp = int((start_time + i * frame_duration / 1000) * 1000) % (
                     2**32
                 )
-            
+
             # 发送帧数据
             await connect.websocket.send(opus_packet)
             # await SendMessage._send_to_websocket_gateway(connect, opus_packet, timestamp, i)
             i += 1
-            
+
         # 关键修复：等待音频播放完成
         elapsed_time = time.perf_counter() - start_time
         remaining_play_time = total_audio_duration - elapsed_time

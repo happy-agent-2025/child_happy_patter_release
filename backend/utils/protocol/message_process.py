@@ -11,6 +11,7 @@ from utils.Dialogue import Dialogue
 from utils.logger import Logger
 from utils.sentence_splitter import SmartSentenceSplitter
 
+
 # 导入agents系统
 from agents.langgraph_workflow import happy_partner_graph
 
@@ -63,6 +64,7 @@ class MessageProcess:
         # 音频传输状态管理
         self.is_audio_transmitting = False  # 音频传输状态标志
         self.audio_transmission_lock = asyncio.Lock()  # 音频传输锁
+
         
     async def process_message(self, message):
         """消息路由"""
@@ -80,28 +82,29 @@ class MessageProcess:
         if self.is_processing or self.is_audio_transmitting:
             self.logger.debug("系统繁忙，跳过当前音频处理")
             return
-        
+
+
         # is_no_speech表示没有说话，表示一句话结束，is_has_speech表示有说话
         is_no_speech, is_has_speech = self.vad.is_no_speech(self.connect, message)
         if is_no_speech:
             self.logger.info(f"一句话结束...")
             self.client_audio_stop = True
             is_has_speech = True # 有话，准备往下
-        
+
         # 如果当前没有语音活动，则将当前时间保存为无语音活动时，保留最后的10个字节
         if not is_has_speech:
             self.asr_opus_datas.append(message)
             self.asr_opus_datas = self.asr_opus_datas[-10:] # 节省静音的数据
-            return 
-            
+            return
+
         self.asr_opus_datas.append(message) # 缓存opus数据，直到收到stop消息才能进行播放处理
         if not self.client_audio_stop:
             return
-        
+
         self.client_audio_stop = False  # 停止音频处理
         if len(self.asr_opus_datas) < 15:
             return
-        
+
         self.is_processing = True
         self.connect.connect_thread_pool.submit(self.start_chat, self.asr_opus_datas) # 提交任务
     
@@ -228,6 +231,11 @@ class MessageProcess:
             # 启动音频播放监控线程
             self.connect.start_audio_playback_monitor()
 
+            # 创建音频任务来跟踪所有句子的完成状态
+            task_id = f"audio_task_{uuid.uuid4().hex[:8]}"
+            self.connect.create_audio_task(task_id, all_sentences)
+            self.logger.info(f"创建音频任务: {task_id}, 包含 {len(all_sentences)} 个句子")
+
             # 处理每个句子
             for i, sentence in enumerate(all_sentences):
                 if len(sentence.strip()) > 0:  # 跳过空句子
@@ -237,7 +245,8 @@ class MessageProcess:
                     sentence_info = {
                         'current_index': i,
                         'total_sentences': len(all_sentences),
-                        'is_last_sentence': is_last_sentence
+                        'is_last_sentence': is_last_sentence,
+                        'task_id': task_id  # 添加任务ID
                     }
 
                     self.logger.info(f"完整句子[{i+1}/{len(all_sentences)}]: {sentence}")
@@ -246,6 +255,7 @@ class MessageProcess:
                     # 创建集成音频任务：包含音频数据和句子信息
                     integrated_task = (future, sentence_info)
                     self.connect.audio_send_queue.put(integrated_task)
+
 
         except Exception as e:
             self.logger.error(f"音频处理错误: {e}")
@@ -266,6 +276,7 @@ class MessageProcess:
             tuple: (remaining_buffer, complete_sentence)
         """
         return self.sentence_splitter.get_complete_sentence(text_buffer)
+
     async def text_message(self, message):
         """处理文本消息"""
         self.logger.info(">>>> 接收到文本消息: " + message)

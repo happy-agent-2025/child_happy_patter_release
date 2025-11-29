@@ -11,7 +11,8 @@
       "Bash(find:*)",
       "Bash(del:*)",
       "Bash(curl:*)",
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []

@@ -27,8 +27,12 @@ class TTSModule(TTS):
             loop = asyncio.new_event_loop()
             loop.run_until_complete(comunicate.save(audio_path))
             loop.close()
+        except edge_tts.exceptions.NoAudioReceived:
+            return [], 0, text
+        except Exception:
+            return [], 0, text
             
-        if not os.path.exists(audio_path): return None
+        if not os.path.exists(audio_path): return [], 0, text
         
         opus_datas, duration = super().audio_file_to_opus(audio_path)
         

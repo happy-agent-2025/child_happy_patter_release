@@ -238,7 +238,7 @@ class MessageProcess:
 
             # 处理每个句子
             for i, sentence in enumerate(all_sentences):
-                if len(sentence.strip()) > 0:  # 跳过空句子
+                if len(sentence.strip()) > 0 and not self.is_only_punctuation(sentence):
                     is_last_sentence = (i == len(all_sentences) - 1)
 
                     # 创建句子信息

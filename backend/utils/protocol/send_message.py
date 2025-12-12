@@ -85,6 +85,8 @@ class SendMessage:
 
         # 处理音频数据，每个报数据段开始发送，每段时长为frame_duration
         timestamp = 0
+        connect.logger.info(f"TTS音频帧: {len(audios)}, 总时长秒: {total_audio_duration}")
+        use_gateway = bool(config.get("server", {}).get("gateway_payload", False))
         for opus_packet in audios:
             if i >= 5:
                 expected_end_time = start_time + ((i + 1) * frame_s)

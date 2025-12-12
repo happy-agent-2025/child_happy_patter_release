@@ -7,6 +7,7 @@ import uuid
 from ai_core.ai_instance_repository import AiInstanceRepository
 from utils.protocol.message_process import MessageProcess
 from utils.protocol.send_message import SendMessage
+from utils.protocol.messge_type import MessageState, MessageType
 from utils.logger import Logger
 
 
@@ -102,7 +103,9 @@ class ConnectProcess:
                     self.logger.error(f"发送消息到前端异常: {e}")
 
             except Exception as e:
+                import traceback
                 self.logger.error(f"音频任务处理异常: {e}")
+                self.logger.error(traceback.format_exc())
 
     def _initialize_agents_state(self):
         """初始化Agents系统状态"""
@@ -383,15 +386,27 @@ class ConnectProcess:
     def _send_playback_completion_signal(self):
         """发送播放完成信号"""
         try:
-            # 向前端发送response为None的消息，表示播放完成
+            # 检查WebSocket连接是否仍然活跃
+            if not self.websocket:
+                self.logger.warning("WebSocket连接已断开，无法发送播放完成信号")
+                return
+
+            # 直接发送TTS结束信号，使用较短的超时时间
             future = asyncio.run_coroutine_threadsafe(
                 SendMessage.send_audio(self, self.config, None, "播放完成"),
                 self.loop
             )
-            future.result(timeout=30)
+
+            # 使用较短的超时时间（5秒）
+            future.result(timeout=5)
             self.logger.info("播放完成信号已发送")
+
+        except TimeoutError:
+            self.logger.error("发送播放完成信号超时，可能连接已断开")
         except Exception as e:
             self.logger.error(f"发送播放完成信号异常: {e}")
+            import traceback
+            self.logger.error(f"详细错误信息: {traceback.format_exc()}")
 
 
     # 处理连接

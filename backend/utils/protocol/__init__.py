@@ -3,9 +3,6 @@
 包含 WebSocket 和 HTTP 协议实现
 """
 
-from .websocket_server import WebSocketServer
-from .http_server import HTTPServer, create_http_server
-
 __all__ = [
     'WebSocketServer',
     'HTTPServer',

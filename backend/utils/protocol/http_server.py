@@ -29,6 +29,7 @@ class HTTPServer:
         self.app = web.Application()
         self.runner = None
         self.site = None
+        self.start_ts = None
 
         # 设置路由
         self._setup_routes()
@@ -118,11 +119,54 @@ class HTTPServer:
 
     async def health_check(self, request: web.Request) -> web.Response:
         """健康检查接口"""
-        return web.json_response({
+        now = int(time.time())
+        server_cfg = self.config.get('server', {})
+        select = self.config.get('select_model', {})
+        llm_sel = select.get('LLM')
+        llm_cfg = self.config.get('LLM', {}).get(str(llm_sel).lower(), {})
+        tts_sel = select.get('TTS')
+        asr_sel = select.get('ASR')
+        vad_sel = select.get('VAD')
+        opus_ok = False
+        ffmpeg_ok = False
+        try:
+            import opuslib_next  # noqa: F401
+            opus_ok = True
+        except Exception:
+            opus_ok = False
+        try:
+            from pydub import AudioSegment
+            ffmpeg_ok = bool(getattr(AudioSegment, 'converter', None))
+        except Exception:
+            ffmpeg_ok = False
+        data = {
             'status': 'healthy',
-            'timestamp': int(time.time()),
-            'service': 'aiohttp-ota-server'
-        })
+            'timestamp': now,
+            'service': 'aiohttp-ota-server',
+            'version': server_cfg.get('version'),
+            'uptime_seconds': (now - int(self.start_ts)) if self.start_ts else None,
+            'components': {
+                'LLM': {
+                    'provider': llm_cfg.get('type'),
+                    'model': llm_cfg.get('model_name') or llm_cfg.get('model'),
+                    'api_key_configured': bool(llm_cfg.get('api_key'))
+                },
+                'TTS': {
+                    'provider': tts_sel
+                },
+                'ASR': {
+                    'provider': asr_sel
+                },
+                'VAD': {
+                    'provider': vad_sel
+                },
+                'env': {
+                    'opuslib_next_available': opus_ok,
+                    'ffmpeg_available': ffmpeg_ok
+                }
+            }
+        }
+        return web.json_response(data)
 
     async def start(self):
         """启动 HTTP 服务器"""
@@ -133,6 +177,7 @@ class HTTPServer:
             self.site = web.TCPSite(self.runner, self.host, self.port)
             await self.site.start()
 
+            self.start_ts = int(time.time())
             print(f"aiohttp HTTP 服务器启动成功")
             print(f"  地址: http://{self.host}:{self.port}")
             print(f"  OTA接口: http://{self.host}:{self.port}/xiaozhi/ota")

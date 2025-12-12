@@ -90,7 +90,7 @@ class Util:
         print(f"Loading configuration from {config_file}")
         with open(config_file, "r", encoding="utf-8") as file:
             config = yaml.safe_load(file)
-        # 初始化目录
+        config = Util.apply_env_overrides(config)
         Util.init_output_dirs(config)
         _config_cache = config
         return config
@@ -121,6 +121,112 @@ class Util:
                 os.makedirs(Util.get_project_dir() + dir_path, exist_ok=True)
             except PermissionError:
                 print(f"警告：无法创建目录 {dir_path}")
+
+    @staticmethod
+    def _cast_type(value, target):
+        if isinstance(target, bool):
+            return str(value).lower() in {"1", "true", "yes", "on"}
+        if isinstance(target, int):
+            try:
+                return int(value)
+            except Exception:
+                return target
+        if isinstance(target, float):
+            try:
+                return float(value)
+            except Exception:
+                return target
+        return value
+
+    @staticmethod
+    def apply_env_overrides(config):
+        sep = "::"
+        def _flatten(prefix, node):
+            items = []
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    key = f"{prefix}{sep}{k}" if prefix else str(k)
+                    items.extend(_flatten(key, v))
+            else:
+                items.append((prefix, node))
+            return items
+
+        def _set_by_path(d, path, value):
+            parts = path.split(sep)
+            cur = d
+            for i, p in enumerate(parts):
+                if i == len(parts) - 1:
+                    cur[p] = value
+                else:
+                    if p not in cur or not isinstance(cur[p], dict):
+                        cur[p] = {}
+                    cur = cur[p]
+
+        flattened = _flatten("", config)
+        for path, current in flattened:
+            env_key = path.upper().replace("-", "_").replace(sep, "_")
+            pref_key = f"APP_{env_key}"
+            raw = os.environ.get(env_key)
+            if raw is None:
+                raw = os.environ.get(pref_key)
+            if raw is None:
+                continue
+            new_val = raw
+            if isinstance(current, (dict, list)):
+                try:
+                    parsed = json.loads(raw)
+                    new_val = parsed
+                except Exception:
+                    continue
+            else:
+                new_val = Util._cast_type(raw, current)
+            _set_by_path(config, path, new_val)
+        return config
+
+    @staticmethod
+    def validate_config(config):
+        errors = []
+        warnings = []
+        server = config.get("server", {})
+        if not isinstance(server.get("port"), int):
+            errors.append("server.port 缺失或非整数")
+        if not server.get("host"):
+            warnings.append("server.host 缺失，使用默认 0.0.0.0")
+
+        select = config.get("select_model", {})
+        llm_sel = select.get("LLM")
+        if llm_sel == "openai":
+            openai = config.get("LLM", {}).get("openai", {})
+            if not openai.get("api_key"):
+                errors.append("LLM.openai.api_key 未配置")
+            if not openai.get("base_url"):
+                warnings.append("LLM.openai.base_url 未配置，使用默认 OpenAI")
+        elif llm_sel == "ollama":
+            ollama = config.get("LLM", {}).get("ollama", {})
+            if not ollama.get("base_url"):
+                errors.append("LLM.ollama.base_url 未配置")
+
+        asr_sel = select.get("ASR")
+        if asr_sel == "FunASR":
+            funasr = config.get("ASR", {}).get("FunASR", {})
+            if not funasr.get("model_dir"):
+                errors.append("ASR.FunASR.model_dir 未配置")
+            elif not os.path.exists(os.path.join(Util.get_project_dir(), funasr.get("model_dir"))):
+                warnings.append("ASR.FunASR.model_dir 路径不存在")
+
+        vad_sel = select.get("VAD")
+        if vad_sel == "Silero":
+            silero = config.get("VAD", {}).get("Silero", {})
+            if not silero.get("model_dir"):
+                errors.append("VAD.Silero.model_dir 未配置")
+            elif not os.path.exists(os.path.join(Util.get_project_dir(), silero.get("model_dir"))):
+                warnings.append("VAD.Silero.model_dir 路径不存在")
+
+        if errors:
+            raise ValueError("配置错误: " + "; ".join(errors))
+        for w in warnings:
+            print("配置警告：" + w)
+        return True
 
     @staticmethod
     def get_random_file_path(dir: str, ex_name: str):

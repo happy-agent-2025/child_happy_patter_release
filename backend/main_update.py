@@ -5,11 +5,14 @@ from utils.protocol.websocket_server import WebSocketServer
 from utils.protocol.http_server import create_http_server
 from utils.ai_factory.ai_factory import AIFactory
 from utils.util import Util
+from utils.db.database import create_tables
 
 
 async def main():
     """主异步函数，同时启动 WebSocket 和 HTTP 服务器"""
     config = Util.get_config()
+    Util.validate_config(config)
+    create_tables()
     ai = AiInstanceRepository(config)
 
     # 启动 WebSocket 服务器

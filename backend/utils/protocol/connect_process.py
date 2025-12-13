@@ -25,7 +25,7 @@ class ConnectProcess:
         self.logger = Logger().log_init(TAG)
         self.connect_thread_pool = ThreadPoolExecutor(max_workers=10)
         self.audio_send_queue = queue.Queue()  #  音频发送队列
-        self.loop = asyncio.get_event_loop() # 获取事件循环
+        self.loop = None
         self.audio_send_thread = None # 音频发送线程
         self.stop_event = threading.Event() # 停止事件，事件管理当前线程
 
@@ -341,6 +341,8 @@ class ConnectProcess:
             )
             self.audio_playback_monitor_thread.start()
             self.logger.info("音频播放监控线程已启动")
+            with self.playback_state_lock:
+                self.current_audio_completed = False
 
     def _audio_playback_monitor(self):
         """音频播放监控线程"""
@@ -384,28 +386,27 @@ class ConnectProcess:
         self.logger.info("音频播放监控线程停止")
 
     def _send_playback_completion_signal(self):
-        """发送播放完成信号"""
         try:
-            # 检查WebSocket连接是否仍然活跃
-            if not self.websocket:
+            if not self.websocket or getattr(self.websocket, 'closed', False):
                 self.logger.warning("WebSocket连接已断开，无法发送播放完成信号")
                 return
-
-            # 直接发送TTS结束信号，使用较短的超时时间
-            future = asyncio.run_coroutine_threadsafe(
-                SendMessage.send_audio(self, self.config, None, "播放完成"),
-                self.loop
-            )
-
-            # 使用较短的超时时间（5秒）
-            future.result(timeout=5)
-            self.logger.info("播放完成信号已发送")
-
-        except TimeoutError:
-            self.logger.error("发送播放完成信号超时，可能连接已断开")
+            if not self.loop:
+                return
+            def _task():
+                asyncio.create_task(self._send_completion_async())
+            self.loop.calreadsafe(_task)
         except Exception as e:
-            self.logger.error(f"发送播放完成信号异常: {e}")
             import traceback
+            self.logger.error(f"发送播放完成信号异常: {e}")
+            self.logger.error(f"详细错误信息: {traceback.format_exc()}")
+
+    async def _send_completion_async(self):
+        try:
+            await asyncio.wait_for(SendMessage.send_audio(self, self.config, None, None), timeout=2)
+            self.logger.info("播放完成信号已发送")
+        except Exception as e:
+            import traceback
+            self.logger.error(f"发送播放完成信号异常: {e}")
             self.logger.error(f"详细错误信息: {traceback.format_exc()}")
 
 
@@ -414,6 +415,7 @@ class ConnectProcess:
         self.logger.info("开始处理连接")
         self.websocket = websocket
         self.session_id = uuid.uuid4().hex
+        self.loop = asyncio.get_running_loop()
 
         # 初始化Agents系统状态
         self._initialize_agents_state()
@@ -460,5 +462,6 @@ class ConnectProcess:
         # 关闭websocket
         if self.websocket:
             await self.websocket.close()
+        self.loop = None
         self.logger.info("连接关闭完成，资源释放完成")
 

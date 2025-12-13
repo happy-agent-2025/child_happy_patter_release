@@ -742,8 +742,124 @@
 - 📝 测试场景管理
 - 📝 测试环境交互
 
+## 流式处理优化测试用例（新增）
+
+### 测试即时反馈功能
+
+#### TestStreamingImmediateFeedback.test_audio_end_triggers_thinking_message
+- **状态**: 🔴 红标（待编写）
+- **描述**: 测试语音结束后200ms内发送"正在思考"消息
+- **测试内容**: 验证语音活动检测后立即触发思考消息
+- **实现时间**: 待安排
+- **通过时间**: 待实现
+
+#### TestStreamingImmediateFeedback.test_thinking_audio_preloaded
+- **状态**: 🔴 红标（待编写）
+- **描述**: 测试预录的"thinking"音频片段存在且可播放
+- **测试内容**: 验证预录音频资源存在并可快速加载
+- **实现时间**: 待安排
+- **通过时间**: 待实现
+
+#### TestStreamingImmediateFeedback.test_concurrent_requests_handling
+- **状态**: 🔴 红标（待编写）
+- **描述**: 测试并发请求时的即时反馈机制
+- **测试内容**: 验证多个并发请求都能获得即时反馈
+- **实现时间**: 待安排
+- **通过时间**: 待实现
+
+### 测试LLM流式接口
+
+#### TestLLMStreamingInterface.test_llm_client_supports_streaming
+- **状态**: 🔴 红标（待编写）
+- **描述**: 测试LLM客户端支持流式响应
+- **测试内容**: 验证LLMClient中存在流式响应方法
+- **实现时间**: 待安排
+- **通过时间**: 待实现
+
+#### TestLLMStreamingInterface.test_stream_generate_response_method
+- **状态**: 🔴 红标（待编写）
+- **描述**: 测试stream_generate_response方法存在
+- **测试内容**: 验证stream_generate_response方法可调用
+- **实现时间**: 待安排
+- **通过时间**: 待实现
+
+#### TestLLMStreamingInterface.test_stream_response_chunk_timing
+- **状态**: 🔴 红标（待编写）
+- **描述**: 测试流式响应分块时间间隔<100ms
+- **测试内容**: 验证流式响应分块间隔符合性能要求
+- **实现时间**: 待安排
+- **通过时间**: 待实现
+
+### 测试并行处理效率
+
+#### TestParallelProcessing.test_llm_tts_parallel_execution
+- **状态**: 🔴 红标（待编写）
+- **描述**: 测试LLM和TTS可以并行执行
+- **测试内容**: 验证LLM处理和TTS合成可以同时进行
+- **实现时间**: 待安排
+- **通过时间**: 待实现
+
+#### TestParallelProcessing.test_first_sentence_tts_start_time
+- **状态**: 🔴 红标（待编写）
+- **描述**: 测试第一句话生成后100ms内开始TTS处理
+- **测试内容**: 验证第一句话生成后快速开始TTS处理
+- **实现时间**: 待安排
+- **通过时间**: 待实现
+
+#### TestParallelProcessing.test_overlap_processing_efficiency
+- **状态**: 🔴 红标（待编写）
+- **描述**: 测试重叠处理效率提升>50%
+- **测试内容**: 验证并行处理相比串行处理效率显著提升
+- **实现时间**: 待安排
+- **通过时间**: 待实现
+
+### 测试响应时间指标
+
+#### TestResponseTimeMetrics.test_initial_feedback_under_200ms
+- **状态**: 🔴 红标（待编写）
+- **描述**: 测试初始反馈<200ms
+- **测试内容**: 验证语音结束后200ms内获得反馈
+- **实现时间**: 待安排
+- **通过时间**: 待实现
+
+#### TestResponseTimeMetrics.test_first_sentence_under_500ms
+- **状态**: 🔴 红标（待编写）
+- **描述**: 测试第一句话<500ms
+- **测试内容**: 验证第一句话音频在500ms内开始播放
+- **实现时间**: 待安排
+- **通过时间**: 待实现
+
+#### TestResponseTimeMetrics.test_complete_response_under_1500ms
+- **状态**: 🔴 红标（待编写）
+- **描述**: 测试完整响应<1500ms
+- **测试内容**: 验证完整响应在1500ms内完成
+- **实现时间**: 待安排
+- **通过时间**: 待实现
+
+#### TestResponseTimeMetrics.test_conversation_turnaround_time
+- **状态**: 🔴 红标（待编写）
+- **描述**: 测试对话周转时间
+- **测试内容**: 验证完整对话轮次的响应时间
+- **实现时间**: 待安排
+- **通过时间**: 待实现
+
 ---
 
-**最后更新**: 2025-11-29
+**最后更新**: 2025-12-07
 **负责人**: Claude Code
-**TDD状态**: Agent独立模型配置系统完成（14/14测试用例通过），智能分句功能完成（10/10测试用例通过），语音传输并发问题修复完成（4/4测试用例通过），音频队列状态检测功能完成（9/9测试用例通过），音频播放状态精确检测与结束信号发送功能完成（12/12测试用例，11通过1预期失败），句子信息与音频队列集成重构完成（7/7集成检查通过），记忆系统测试用例编写完成（红阶段）
+**TDD状态**:
+- ✅ **已完成**:
+  - Agent独立模型配置系统（14/14测试用例通过）
+  - 智能分句功能（10/10测试用例通过）
+  - 语音传输并发问题修复（4/4测试用例通过）
+  - 音频队列状态检测功能（9/9测试用例通过）
+  - 音频播放状态精确检测与结束信号发送功能（12/12测试用例，11通过1预期失败）
+  - 句子信息与音频队列集成重构（7/7集成检查通过）
+
+- 🔴 **红阶段**:
+  - 记忆系统测试用例（8个测试用例，6个待实现）
+  - 流式处理优化测试用例（13个测试用例，全部待编写）
+
+- 📋 **待集成**:
+  - 多角色系统集成优化（需要切换MessageProcess到multi_agent）
+  - 流式处理优化实施（响应时间目标：500ms以内）

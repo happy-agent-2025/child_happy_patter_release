@@ -20,7 +20,7 @@ server:
   reconnect_interval: 5000
 
 select_model:
-  TTS: "EdgeTTS"
+  TTS: "PyTTSX3"
   ASR: "FunASR"
   LLM: "openai"
   VAD: "Silero"
@@ -29,7 +29,11 @@ TTS:
   EdgeTTS:
     type: "edge"
     output_dir: "ai_core/tts/temp"
-    voice: "zh-CN-XiaoxiaoNeural"
+    voice: "zh-CN-YunxiNeural"
+  PyTTSX3:
+    type: "pyttsx3"
+    output_dir: "ai_core/tts/temp"
+    voice: "zh-CN"
 
 
 LLM:

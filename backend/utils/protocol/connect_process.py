@@ -394,7 +394,7 @@ class ConnectProcess:
                 return
             def _task():
                 asyncio.create_task(self._send_completion_async())
-            self.loop.calreadsafe(_task)
+            self.loop.call_soon_threadsafe(_task)
         except Exception as e:
             import traceback
             self.logger.error(f"发送播放完成信号异常: {e}")

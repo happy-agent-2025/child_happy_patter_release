@@ -8,24 +8,7 @@ from utils.util import Util
 
 
 class SendMessage:
-    
-    # 发送物联网消息
-    @staticmethod
-    async def send_iot_message(connect, iot_message):
-
-        if not Util.is_valid_iot_json(iot_message):
-            print("Invalid JSON format")
-            return
-        iot_message = re.sub(r'\s+', '', iot_message) # 去除多余的空格，可以节省带宽
-        frame_id = str(uuid.uuid4().hex)
-        msg = {
-            "type": MessageType.IOT.value,
-            "session_id": connect.session_id,
-            "text": json.loads(iot_message),
-            "frame_id": frame_id
-        }
-        await connect.websocket.send(json.dumps(msg))
-    
+       
     # 发送文本消息
     @staticmethod
     async def _send_stt_text(connect, text):
@@ -110,7 +93,7 @@ class SendMessage:
             await asyncio.sleep(remaining_play_time)
 
         # 标记音频播放完成
-        connect.mark_audio_completed()
+        await connect.mark_audio_completed()
 
         # 发送后端音频结束
         # await SendMessage._send_audio_text(connect, MessageType.TTS.value, MessageState.STOP.value, "TTS结束")

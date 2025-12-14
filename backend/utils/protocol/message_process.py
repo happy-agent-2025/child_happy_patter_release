@@ -228,14 +228,6 @@ class MessageProcess:
 
             self.logger.info(f"智能分句结果: 共{len(all_sentences)}个句子")
 
-            # 启动音频播放监控线程
-            self.connect.start_audio_playback_monitor()
-
-            # 创建音频任务来跟踪所有句子的完成状态
-            task_id = f"audio_task_{uuid.uuid4().hex[:8]}"
-            self.connect.create_audio_task(task_id, all_sentences)
-            self.logger.info(f"创建音频任务: {task_id}, 包含 {len(all_sentences)} 个句子")
-
             # 处理每个句子
             for i, sentence in enumerate(all_sentences):
                 if len(sentence.strip()) > 0 and not self.is_only_punctuation(sentence):
@@ -246,7 +238,6 @@ class MessageProcess:
                         'current_index': i,
                         'total_sentences': len(all_sentences),
                         'is_last_sentence': is_last_sentence,
-                        'task_id': task_id  # 添加任务ID
                     }
 
                     self.logger.info(f"完整句子[{i+1}/{len(all_sentences)}]: {sentence}")

@@ -170,17 +170,23 @@ class ConnectProcess:
             self.current_playing_index = current_index
             self.total_sentences = total_sentences
             self.is_last_sentence_playing = is_last_sentence
-            self.current_audio_completed = False  # 重置音频完成状态
 
             self.logger.info(f"设置播放状态: 当前句子 {current_index+1}/{total_sentences}, 最后一个句子: {is_last_sentence}")
 
-    def mark_audio_completed(self):
+    async def mark_audio_completed(self):
         """标记当前音频播放完成"""
         with self.playback_state_lock:
             self.current_audio_completed = True
 
             if self.is_last_sentence_playing and self.current_playing_index == self.total_sentences - 1:
                 self.logger.info("最后一个句子在send_audio中播放完成")
+                try:
+                    await SendMessage.send_audio(self, self.config, None, None)
+                    self.logger.info("播放完成信号已发送")
+                except Exception as e:
+                    import traceback
+                    self.logger.error(f"发送播放完成信号异常: {e}")
+                    self.logger.error(f"详细错误信息: {traceback.format_exc()}")
             else:
                 self.logger.info(f"非最后一个句子音频播放完成: 句子 {self.current_playing_index+1}/{self.total_sentences}")
 
@@ -190,225 +196,6 @@ class ConnectProcess:
                     callback()
                 except Exception as e:
                     self.logger.error(f"音频完成回调执行失败: {e}")
-
-        # 标记当前句子完成（如果当前有音频任务）
-        self._mark_current_sentence_completed()
-
-    def _mark_current_sentence_completed(self):
-        """标记当前句子在音频任务中完成"""
-        with self.audio_task_lock:
-            if self.current_task_id and self.current_task_id in self.task_sentence_mapping:
-                # 获取当前句子的索引
-                current_sentence_index = self.current_playing_index
-
-                # 标记句子完成
-                self.mark_sentence_completed(self.current_task_id, current_sentence_index)
-
-                self.logger.debug(f"标记句子完成: 任务 {self.current_task_id}, 句子 {current_sentence_index}")
-            else:
-                self.logger.debug("没有当前音频任务，跳过句子完成标记")
-
-    def add_audio_completion_callback(self, callback):
-        """添加音频播放完成回调"""
-        with self.playback_state_lock:
-            self.audio_completion_callbacks.append(callback)
-
-    def add_audio_task(self, task_info):
-        """
-        添加音频任务
-
-        Args:
-            task_info: 音频任务信息，包含任务ID、音频数据、文本等
-        """
-        with self.audio_task_lock:
-            self.audio_tasks.append(task_info)
-            self.logger.info(f"添加音频任务: {task_info.get('task_id', 'unknown')}")
-
-    def mark_audio_task_completed(self, task_id):
-        """
-        标记音频任务完成
-
-        Args:
-            task_id: 音频任务ID
-        """
-        with self.audio_task_lock:
-            # 从任务队列中移除完成的任务
-            self.audio_tasks = [task for task in self.audio_tasks if task.get('task_id') != task_id]
-
-            # 清理映射和完成状态
-            if task_id in self.task_sentence_mapping:
-                del self.task_sentence_mapping[task_id]
-            if task_id in self.completed_sentences:
-                del self.completed_sentences[task_id]
-
-            # 如果当前任务完成，清空当前任务ID
-            if self.current_task_id == task_id:
-                self.current_task_id = None
-
-            self.logger.info(f"音频任务 {task_id} 完成，剩余任务数: {len(self.audio_tasks)}")
-
-    def get_audio_task_count(self):
-        """获取当前音频任务数量"""
-        with self.audio_task_lock:
-            return len(self.audio_tasks)
-
-    def create_audio_task(self, task_id, all_sentences):
-        """
-        创建音频任务
-
-        Args:
-            task_id: 任务ID
-            all_sentences: 所有句子列表
-        """
-        with self.audio_task_lock:
-            task_info = {
-                'task_id': task_id,
-                'sentences': all_sentences,
-                'completed_sentences': set(),
-                'status': 'processing',
-                'created_time': time.time()
-            }
-            self.audio_tasks.append(task_info)
-            self.task_sentence_mapping[task_id] = all_sentences
-            self.completed_sentences[task_id] = set()
-            self.current_task_id = task_id
-
-            self.logger.info(f"创建音频任务: {task_id}, 包含 {len(all_sentences)} 个句子")
-
-    def mark_sentence_completed(self, task_id, sentence_index):
-        """
-        标记句子完成
-
-        Args:
-            task_id: 任务ID
-            sentence_index: 句子索引
-        """
-        with self.audio_task_lock:
-            if task_id in self.completed_sentences:
-                self.completed_sentences[task_id].add(sentence_index)
-
-                # 检查任务是否全部完成
-                if task_id in self.task_sentence_mapping:
-                    total_sentences = len(self.task_sentence_mapping[task_id])
-                    completed_count = len(self.completed_sentences[task_id])
-
-                    self.logger.debug(f"任务 {task_id} 句子完成: {completed_count}/{total_sentences}")
-
-                    # 如果所有句子都完成，标记任务完成
-                    if completed_count == total_sentences:
-                        self.mark_audio_task_completed(task_id)
-                        self.logger.info(f"音频任务 {task_id} 全部完成")
-
-    def get_audio_task_status(self, task_id):
-        """获取音频任务状态"""
-        with self.audio_task_lock:
-            if task_id not in self.task_sentence_mapping:
-                return None
-
-            total_sentences = len(self.task_sentence_mapping[task_id])
-            completed_count = len(self.completed_sentences.get(task_id, set()))
-
-            return {
-                'task_id': task_id,
-                'total_sentences': total_sentences,
-                'completed_sentences': completed_count,
-                'progress': completed_count / total_sentences if total_sentences > 0 else 0,
-                'status': 'completed' if completed_count == total_sentences else 'processing'
-            }
-
-    def get_playback_monitor_stats(self):
-        """获取播放监控统计信息"""
-        with self.playback_state_lock:
-            return {
-                'monitor_iteration_count': self.monitor_iteration_count,
-                'last_completion_time': self.last_completion_time,
-                'current_playing_index': self.current_playing_index,
-                'total_sentences': self.total_sentences,
-                'is_last_sentence_playing': self.is_last_sentence_playing,
-                'current_audio_completed': self.current_audio_completed,
-                'audio_task_count': self.get_audio_task_count(),
-                'monitor_thread_alive': (self.audio_playback_monitor_thread and
-                                       self.audio_playback_monitor_thread.is_alive())
-            }
-
-
-    def start_audio_playback_monitor(self):
-        """启动音频播放监控线程"""
-        if self.audio_playback_monitor_thread is None or not self.audio_playback_monitor_thread.is_alive():
-            self.audio_playback_monitor_thread = threading.Thread(
-                target=self._audio_playback_monitor,
-                daemon=True
-            )
-            self.audio_playback_monitor_thread.start()
-            self.logger.info("音频播放监控线程已启动")
-            with self.playback_state_lock:
-                self.current_audio_completed = False
-
-    def _audio_playback_monitor(self):
-        """音频播放监控线程"""
-        self.logger.info("音频播放监控线程启动")
-
-        while not self.stop_event.is_set():
-            try:
-                self.monitor_iteration_count += 1
-
-                # 检查是否是最后一个句子且在send_audio中播放完成
-                with self.playback_state_lock:
-                    is_last_sentence = self.is_last_sentence_playing
-                    current_index = self.current_playing_index
-                    total_sentences = self.total_sentences
-                    current_audio_completed = self.current_audio_completed
-
-                # 如果是最后一个句子且在send_audio中播放完成，则发送结束信号
-                if (is_last_sentence and
-                    current_index == total_sentences - 1 and
-                    current_audio_completed):
-                    self.logger.info("检测到最后一个句子在send_audio中播放完成，发送结束信号")
-                    self._send_playback_completion_signal()
-                    # 修复：发送信号后重置状态，继续监控
-                    with self.playback_state_lock:
-                        self.current_audio_completed = False
-                    self.last_completion_time = time.time()
-
-                # 性能优化：每100次迭代记录一次调试信息
-                if self.monitor_iteration_count % 100 == 0:
-                    self.logger.debug(f"音频播放监控线程运行中 - 迭代次数: {self.monitor_iteration_count}")
-
-                # 等待一段时间再检查
-                self.stop_event.wait(0.5)
-
-            except Exception as e:
-                self.logger.error(f"音频播放监控线程异常: {e}")
-                # 修复：异常时继续监控，不break
-                # 等待一段时间后继续，避免快速循环
-                self.stop_event.wait(1.0)
-
-        self.logger.info("音频播放监控线程停止")
-
-    def _send_playback_completion_signal(self):
-        try:
-            if not self.websocket or getattr(self.websocket, 'closed', False):
-                self.logger.warning("WebSocket连接已断开，无法发送播放完成信号")
-                return
-            if not self.loop:
-                return
-            def _task():
-                asyncio.create_task(self._send_completion_async())
-            self.loop.call_soon_threadsafe(_task)
-        except Exception as e:
-            import traceback
-            self.logger.error(f"发送播放完成信号异常: {e}")
-            self.logger.error(f"详细错误信息: {traceback.format_exc()}")
-
-    async def _send_completion_async(self):
-        try:
-            await asyncio.wait_for(SendMessage.send_audio(self, self.config, None, None), timeout=2)
-            self.logger.info("播放完成信号已发送")
-        except Exception as e:
-            import traceback
-            self.logger.error(f"发送播放完成信号异常: {e}")
-            self.logger.error(f"详细错误信息: {traceback.format_exc()}")
-
 
     # 处理连接
     async def connect(self, websocket):

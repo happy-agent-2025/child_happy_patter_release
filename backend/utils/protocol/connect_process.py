@@ -54,6 +54,11 @@ class ConnectProcess:
         self.tts_timeout_seconds = (self.config.get("tts_timeout_seconds")
                                     if isinstance(self.config, dict) else 30) or 30
 
+        # 顺序播放缓冲
+        self._order_buffer = {}
+        self._expected_index = 0
+        self._current_total = None
+
         # 性能监控
         self.monitor_iteration_count = 0  # 监控迭代计数
         self.last_completion_time = None  # 上次完成时间
@@ -79,25 +84,54 @@ class ConnectProcess:
                 opus_data, duration, text = future.result()
 
                 try:
-                    # 提交协程处理，在主线程中处理
-                    if sentence_info:
-                        # 获取任务ID（如果存在）
-                        task_id = sentence_info.get('task_id')
-                        future_1 = asyncio.run_coroutine_threadsafe(
-                            SendMessage.send_audio(
-                                self, self.config, opus_data, text,
-                                sentence_info['current_index'],
-                                sentence_info['total_sentences'],
-                                sentence_info['is_last_sentence'],
-                                task_id
-                            ), self.loop
-                        )
+                    # 顺序缓冲：按索引存储已完成的音频
+                    if sentence_info and 'current_index' in sentence_info and 'total_sentences' in sentence_info:
+                        idx = sentence_info['current_index']
+                        total = sentence_info['total_sentences']
+
+                        # 新一轮响应的初始化
+                        if self._current_total is None:
+                            self._order_buffer.clear()
+                            self._expected_index = 0
+                            self._current_total = total
+
+                        # 兼容不同 total（异常情况重置）
+                        if self._current_total != total and idx == 0:
+                            self._order_buffer.clear()
+                            self._expected_index = 0
+                            self._current_total = total
+
+                        # 缓存当前结果
+                        self._order_buffer[idx] = (opus_data, text, sentence_info)
+
+                        # 按序冲刷
+                        while self._expected_index in self._order_buffer:
+                            opus_data2, text2, info2 = self._order_buffer.pop(self._expected_index)
+                            task_id2 = info2.get('task_id') if info2 else None
+                            fut_send = asyncio.run_coroutine_threadsafe(
+                                SendMessage.send_audio(
+                                    self, self.config, opus_data2, text2,
+                                    info2['current_index'],
+                                    info2['total_sentences'],
+                                    info2['is_last_sentence'],
+                                    task_id2
+                                ), self.loop
+                            )
+                            fut_send.result()
+                            self._expected_index += 1
+
+                            # 一轮完成，重置
+                            if self._current_total is not None and self._expected_index >= self._current_total:
+                                self._current_total = None
+                                self._expected_index = 0
+                                self._order_buffer.clear()
+                                break
                     else:
-                        # 如果没有句子信息，使用默认参数
-                        future_1 = asyncio.run_coroutine_threadsafe(
+                        # 无句子信息，直接发送
+                        fut_send = asyncio.run_coroutine_threadsafe(
                             SendMessage.send_audio(self, self.config, opus_data, text), self.loop
                         )
-                    future_1.result()
+                        fut_send.result()
 
                 except Exception as e:
                     self.logger.error(f"发送消息到前端异常: {e}")

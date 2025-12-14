@@ -232,6 +232,9 @@ class MessageProcess:
 
             self.logger.info(f"智能分句结果: 共{len(all_sentences)}个句子")
 
+            # 为本轮响应生成任务ID
+            task_id = f"task_{uuid.uuid4().hex[:8]}"
+
             # 处理每个句子
             for i, sentence in enumerate(all_sentences):
                 if len(sentence.strip()) > 0 and not self.is_only_punctuation(sentence):
@@ -242,6 +245,7 @@ class MessageProcess:
                         'current_index': i,
                         'total_sentences': len(all_sentences),
                         'is_last_sentence': is_last_sentence,
+                        'task_id': task_id,
                     }
 
                     self.logger.info(f"完整句子[{i+1}/{len(all_sentences)}]: {sentence}")

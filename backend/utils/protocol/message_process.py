@@ -184,8 +184,12 @@ class MessageProcess:
             if self.is_only_punctuation(processing_text):
                 self.logger.info(f"识别到的垃圾文本: {processing_text}")
                 future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, None)
-                self.connect.add_audio_task(future)  # 添加音频任务跟踪
-                self.connect.audio_send_queue.put(future)
+                sentence_info = {
+                    'current_index': 0,
+                    'total_sentences': 1,
+                    'is_last_sentence': True,
+                }
+                self.connect.enqueue_audio_task(future, sentence_info)
                 self.is_processing = False
                 return
             self.logger.info(f"识别结果: {processing_text}")
@@ -243,9 +247,7 @@ class MessageProcess:
                     self.logger.info(f"完整句子[{i+1}/{len(all_sentences)}]: {sentence}")
                     future = self.connect.connect_thread_pool.submit(self.ai.tts.text_to_opus_data, sentence)
 
-                    # 创建集成音频任务：包含音频数据和句子信息
-                    integrated_task = (future, sentence_info)
-                    self.connect.audio_send_queue.put(integrated_task)
+                    self.connect.enqueue_audio_task(future, sentence_info)
 
 
         except Exception as e:

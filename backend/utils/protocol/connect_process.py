@@ -51,6 +51,9 @@ class ConnectProcess:
         self.completed_sentences = {}  # 已完成的句子
         self.current_task_id = None  # 当前处理的音频任务ID
 
+        self.tts_timeout_seconds = (self.config.get("tts_timeout_seconds")
+                                    if isinstance(self.config, dict) else 30) or 30
+
         # 性能监控
         self.monitor_iteration_count = 0  # 监控迭代计数
         self.last_completion_time = None  # 上次完成时间
@@ -72,11 +75,8 @@ class ConnectProcess:
                 continue
 
             try:
-                # 解构集成任务
                 future, sentence_info = integrated_task
-
-                # 获取音频数据
-                opus_data, duration, text = future.result(timeout=10) # 等待结果，超时10秒，等待处理完成， future只是占位符
+                opus_data, duration, text = future.result()
 
                 try:
                     # 提交协程处理，在主线程中处理
@@ -106,6 +106,17 @@ class ConnectProcess:
                 import traceback
                 self.logger.error(f"音频任务处理异常: {e}")
                 self.logger.error(traceback.format_exc())
+
+    def enqueue_audio_task(self, future, sentence_info):
+        def _on_done(fut):
+            try:
+                self.audio_send_queue.put((fut, sentence_info))
+            except Exception as e:
+                self.logger.error(f"音频任务入队失败: {e}")
+        try:
+            future.add_done_callback(_on_done)
+        except Exception as e:
+            self.logger.error(f"注册音频任务回调失败: {e}")
 
     def _initialize_agents_state(self):
         """初始化Agents系统状态"""
